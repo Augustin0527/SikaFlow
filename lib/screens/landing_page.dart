@@ -1,0 +1,1828 @@
+import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
+import 'auth/login_screen.dart';
+import 'auth/inscription_screen.dart';
+
+class LandingPage extends StatefulWidget {
+  const LandingPage({super.key});
+
+  @override
+  State<LandingPage> createState() => _LandingPageState();
+}
+
+class _LandingPageState extends State<LandingPage>
+    with TickerProviderStateMixin {
+  late AnimationController _heroController;
+  late AnimationController _featuresController;
+  late Animation<double> _heroFade;
+  late Animation<Offset> _heroSlide;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _heroController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _featuresController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _heroFade = CurvedAnimation(parent: _heroController, curve: Curves.easeOut);
+    _heroSlide = Tween<Offset>(
+      begin: const Offset(0, 0.12),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _heroController, curve: Curves.easeOut));
+
+    _heroController.forward();
+    Future.delayed(const Duration(milliseconds: 400), () {
+      if (mounted) _featuresController.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _heroController.dispose();
+    _featuresController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isWide = MediaQuery.of(context).size.width > 768;
+
+    return Scaffold(
+      backgroundColor: AppTheme.backgroundDark,
+      body: CustomScrollView(
+        controller: _scrollController,
+        slivers: [
+          // ── AppBar ──────────────────────────────────────────────────────
+          SliverAppBar(
+            backgroundColor: AppTheme.backgroundDark.withValues(alpha: 0.95),
+            floating: true,
+            snap: true,
+            elevation: 0,
+            title: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.asset(
+                      'assets/icon/app_icon.png',
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.account_balance_wallet,
+                        color: AppTheme.accentOrange,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Text(
+                  'SikaFlow',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              if (isWide)
+                TextButton(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  ),
+                  child: const Text(
+                    'Se Connecter',
+                    style: TextStyle(color: AppTheme.textSecondary),
+                  ),
+                ),
+              const SizedBox(width: 8),
+              Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: ElevatedButton(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const InscriptionScreen()),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.accentOrange,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text(
+                    'S\'inscrire',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          // ── Contenu principal ────────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Column(
+              children: [
+                _buildHeroSection(isWide),
+                _buildStatsBar(),
+                _buildFeaturesSection(isWide),
+                _buildHowItWorksSection(isWide),
+                _buildRolesSection(isWide),
+                _buildPricingSection(isWide),
+                _buildOperateursSection(),
+                _buildCTASection(),
+                _buildFooter(isWide),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // HERO SECTION
+  // ════════════════════════════════════════════════════════════════════════════
+  Widget _buildHeroSection(bool isWide) {
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppTheme.backgroundDark, AppTheme.primaryNavy],
+          stops: [0.0, 1.0],
+        ),
+      ),
+      child: Stack(
+        children: [
+          // Cercles décoratifs
+          Positioned(
+            top: -60,
+            right: -60,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppTheme.accentOrange.withValues(alpha: 0.06),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -40,
+            left: -40,
+            child: Container(
+              width: 200,
+              height: 200,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppTheme.accentOrange.withValues(alpha: 0.04),
+              ),
+            ),
+          ),
+          // Contenu
+          Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: isWide ? 80 : 24,
+              vertical: isWide ? 90 : 60,
+            ),
+            child: FadeTransition(
+              opacity: _heroFade,
+              child: SlideTransition(
+                position: _heroSlide,
+                child: isWide
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                              flex: 6, child: _heroText()),
+                          const SizedBox(width: 60),
+                          Expanded(flex: 4, child: _heroPhone()),
+                        ],
+                      )
+                    : Column(
+                        children: [
+                          _heroText(),
+                          const SizedBox(height: 40),
+                          _heroPhone(),
+                        ],
+                      ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _heroText() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppTheme.accentOrange.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+                color: AppTheme.accentOrange.withValues(alpha: 0.4)),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.verified, color: AppTheme.accentOrange, size: 14),
+              SizedBox(width: 6),
+              Text(
+                'Système de gestion des opérations de Mobile Money',
+                style: TextStyle(
+                    color: AppTheme.accentOrange,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'Gérez vos opérations\nMobile Money',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 46,
+            fontWeight: FontWeight.w900,
+            height: 1.1,
+            letterSpacing: -1,
+          ),
+        ),
+        const SizedBox(height: 8),
+        ShaderMask(
+          shaderCallback: (bounds) =>
+              AppTheme.accentGradient.createShader(bounds),
+          child: const Text(
+            'en toute simplicité',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 46,
+              fontWeight: FontWeight.w900,
+              height: 1.1,
+              letterSpacing: -1,
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'Suivi en temps réel, gestion intelligente de vos agents\n'
+          'et rapports automatisés.\n\n'
+          'SikaFlow connecte vos agents de terrain et centralise\n'
+          'toutes vos opérations marchandes MTN, Moov et Celtiis\n'
+          'dans un tableau de bord unique, clair et sécurisé.',
+          style: TextStyle(
+            color: AppTheme.textSecondary,
+            fontSize: 15,
+            height: 1.7,
+          ),
+        ),
+        const SizedBox(height: 36),
+        Wrap(
+          spacing: 16,
+          runSpacing: 12,
+          children: [
+            ElevatedButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const InscriptionScreen()),
+              ),
+              icon: const Icon(Icons.rocket_launch, size: 18),
+              label: const Text('Commencer Gratuitement'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.accentOrange,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 28, vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                textStyle: const TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.bold),
+                elevation: 4,
+                shadowColor:
+                    AppTheme.accentOrange.withValues(alpha: 0.4),
+              ),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+              ),
+              icon: const Icon(Icons.login, size: 18),
+              label: const Text('Se Connecter'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(
+                    color: AppTheme.textSecondary, width: 1.5),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 28, vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                textStyle: const TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 32),
+        Row(
+          children: [
+            _heroBadge(Icons.shield_outlined, '1 mois gratuit'),
+            const SizedBox(width: 24),
+            _heroBadge(Icons.sync, 'Sync temps réel'),
+            const SizedBox(width: 24),
+            _heroBadge(Icons.lock_outline, 'Sécurisé'),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _heroBadge(IconData icon, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: AppTheme.accentOrange, size: 16),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w500),
+        ),
+      ],
+    );
+  }
+
+  Widget _heroPhone() {
+    return Center(
+      child: Container(
+        width: 280,
+        height: 520,
+        decoration: BoxDecoration(
+          color: AppTheme.cardDark,
+          borderRadius: BorderRadius.circular(40),
+          border: Border.all(
+              color: AppTheme.accentOrange.withValues(alpha: 0.3), width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.accentOrange.withValues(alpha: 0.15),
+              blurRadius: 50,
+              spreadRadius: 5,
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 20),
+            // Notch
+            Container(
+              width: 80,
+              height: 6,
+              decoration: BoxDecoration(
+                color: AppTheme.divider,
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Header simulé
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      color: Colors.white,
+                      child: const Icon(
+                        Icons.account_balance_wallet,
+                        color: AppTheme.accentOrange,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('SikaFlow',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14)),
+                      Text('Dashboard Agent',
+                          style: TextStyle(
+                              color: AppTheme.textSecondary, fontSize: 11)),
+                    ],
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.success.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text('En ligne',
+                        style: TextStyle(
+                            color: AppTheme.success,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Solde
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: AppTheme.accentGradient,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Solde du jour',
+                      style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11)),
+                  const SizedBox(height: 4),
+                  const Text('850 000 FCFA',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      _phoneStatChip('↑ 12 ops', true),
+                      const SizedBox(width: 8),
+                      _phoneStatChip('+45k FCFA', true),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Mini stats
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Expanded(
+                      child: _phoneMiniCard(
+                          'MTN', '450k', AppTheme.mtnYellow)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: _phoneMiniCard(
+                          'Moov', '280k', AppTheme.moovBlue)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: _phoneMiniCard(
+                          'Celtiis', '120k', AppTheme.celtiisRed)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Transactions récentes
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: [
+                  _phoneTxRow('Dépôt MTN', '+25 000', true),
+                  _phoneTxRow('Retrait Moov', '-15 000', false),
+                  _phoneTxRow('Dépôt Celtiis', '+8 500', true),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _phoneStatChip(String text, bool positive) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(text,
+          style: const TextStyle(color: Colors.white, fontSize: 10)),
+    );
+  }
+
+  Widget _phoneMiniCard(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        children: [
+          Text(label,
+              style: TextStyle(
+                  color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+          Text(value,
+              style: const TextStyle(
+                  color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  Widget _phoneTxRow(String label, String amount, bool positive) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: positive
+                  ? AppTheme.success.withValues(alpha: 0.2)
+                  : AppTheme.error.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              positive ? Icons.arrow_downward : Icons.arrow_upward,
+              color: positive ? AppTheme.success : AppTheme.error,
+              size: 14,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(label,
+                style: const TextStyle(
+                    color: AppTheme.textSecondary, fontSize: 11)),
+          ),
+          Text(
+            amount,
+            style: TextStyle(
+              color: positive ? AppTheme.success : AppTheme.error,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // STATS BAR
+  // ════════════════════════════════════════════════════════════════════════════
+  Widget _buildStatsBar() {
+    return Container(
+      color: AppTheme.cardDarker,
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
+      child: Wrap(
+        alignment: WrapAlignment.spaceEvenly,
+        runSpacing: 16,
+        spacing: 32,
+        children: [
+          _statItem('3', 'Opérateurs couverts'),
+          _dividerStat(),
+          _statItem('30 jours', 'Essai gratuit'),
+          _dividerStat(),
+          _statItem('100%', 'Données privées'),
+          _dividerStat(),
+          _statItem('99.9%', 'Disponibilité'),
+        ],
+      ),
+    );
+  }
+
+  Widget _statItem(String value, String label) {
+    return Column(
+      children: [
+        ShaderMask(
+          shaderCallback: (bounds) =>
+              AppTheme.accentGradient.createShader(bounds),
+          child: Text(
+            value,
+            style: const TextStyle(
+                color: Colors.white,
+                fontSize: 28,
+                fontWeight: FontWeight.w900),
+          ),
+        ),
+        Text(label,
+            style: const TextStyle(
+                color: AppTheme.textSecondary, fontSize: 13)),
+      ],
+    );
+  }
+
+  Widget _dividerStat() {
+    return Container(
+      width: 1,
+      height: 40,
+      color: AppTheme.divider,
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // FEATURES SECTION
+  // ════════════════════════════════════════════════════════════════════════════
+  Widget _buildFeaturesSection(bool isWide) {
+    final features = [
+      _FeatureData(
+        icon: Icons.sync_rounded,
+        color: AppTheme.accentOrange,
+        title: 'Synchronisation en temps réel',
+        description:
+            'Toutes les opérations sont synchronisées instantanément entre tous vos agents et gestionnaires, où qu\'ils soient.',
+      ),
+      _FeatureData(
+        icon: Icons.verified_user_rounded,
+        color: AppTheme.moovBlue,
+        title: 'Vos données, votre espace',
+        description:
+            'Votre agence dispose d\'un espace dédié et sécurisé. Vos données sont privées et accessibles uniquement par votre équipe.',
+      ),
+      _FeatureData(
+        icon: Icons.people_alt_rounded,
+        color: AppTheme.success,
+        title: 'Gestion des rôles',
+        description:
+            'Attribuez des rôles précis — Gestionnaire, Agent, Contrôleur — avec des accès adaptés à chaque profil de votre équipe.',
+      ),
+      _FeatureData(
+        icon: Icons.bar_chart_rounded,
+        color: AppTheme.mtnYellow,
+        title: 'Rapports automatiques',
+        description:
+            'Générez des rapports journaliers, hebdomadaires et mensuels en un clic. Suivez l\'évolution de chaque opération.',
+      ),
+      _FeatureData(
+        icon: Icons.account_balance_wallet_rounded,
+        color: AppTheme.celtiisRed,
+        title: 'Suivi des ristournes',
+        description:
+            'Calculez automatiquement les commissions MTN, Moov et Celtiis et gérez les ristournes de vos agents.',
+      ),
+      _FeatureData(
+        icon: Icons.notifications_active_rounded,
+        color: const Color(0xFF9C27B0),
+        title: 'Alertes & Notifications',
+        description:
+            'Recevez des alertes en temps réel pour les opérations critiques et les seuils de solde importants de votre agence.',
+      ),
+    ];
+
+    return Container(
+      padding: EdgeInsets.symmetric(
+          horizontal: isWide ? 80 : 24, vertical: 80),
+      child: Column(
+        children: [
+          _sectionHeader(
+            'Tout ce dont vous avez besoin',
+            'Fonctionnalités',
+            'Une plateforme complète pour gérer toutes vos opérations Mobile Money au Bénin.',
+          ),
+          const SizedBox(height: 56),
+          FadeTransition(
+            opacity: _featuresController,
+            child: isWide
+                ? GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3,
+                      crossAxisSpacing: 24,
+                      mainAxisSpacing: 24,
+                      childAspectRatio: 1.2,
+                    ),
+                    itemCount: features.length,
+                    itemBuilder: (_, i) => _featureCard(features[i]),
+                  )
+                : Column(
+                    children: features
+                        .map((f) => Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: _featureCard(f),
+                            ))
+                        .toList(),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _featureCard(_FeatureData f) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppTheme.cardDark,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: f.color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(f.icon, color: f.color, size: 26),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            f.title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            f.description,
+            style: const TextStyle(
+                color: AppTheme.textSecondary, fontSize: 13, height: 1.6),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // HOW IT WORKS
+  // ════════════════════════════════════════════════════════════════════════════
+  Widget _buildHowItWorksSection(bool isWide) {
+    return Container(
+      color: AppTheme.cardDarker,
+      padding: EdgeInsets.symmetric(
+          horizontal: isWide ? 80 : 24, vertical: 80),
+      child: Column(
+        children: [
+          _sectionHeader(
+            'Simple et rapide',
+            'Comment ça marche',
+            'Démarrez en 3 étapes simples et commencez à gérer vos opérations dès aujourd\'hui.',
+          ),
+          const SizedBox(height: 56),
+          isWide
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                        child: _stepCard(
+                            1, Icons.app_registration_rounded, 'Inscription',
+                            'Créez votre compte entreprise en quelques minutes. Essai gratuit de 30 jours sans carte bancaire.')),
+                    _stepArrow(),
+                    Expanded(
+                        child: _stepCard(
+                            2, Icons.group_add_rounded, 'Ajoutez vos agents',
+                            'Invitez vos agents, contrôleurs et gestionnaires. Chacun reçoit un accès adapté à son rôle.')),
+                    _stepArrow(),
+                    Expanded(
+                        child: _stepCard(
+                            3, Icons.trending_up_rounded, 'Gérez & suivez',
+                            'Suivez en temps réel toutes les opérations MTN, Moov et Celtiis depuis votre tableau de bord.')),
+                  ],
+                )
+              : Column(
+                  children: [
+                    _stepCard(1, Icons.app_registration_rounded, 'Inscription',
+                        'Créez votre compte entreprise en quelques minutes. Essai gratuit de 30 jours.'),
+                    const SizedBox(height: 20),
+                    _stepCard(2, Icons.group_add_rounded, 'Ajoutez vos agents',
+                        'Invitez vos agents, contrôleurs et gestionnaires.'),
+                    const SizedBox(height: 20),
+                    _stepCard(3, Icons.trending_up_rounded, 'Gérez & suivez',
+                        'Suivez en temps réel toutes vos opérations Mobile Money.'),
+                  ],
+                ),
+        ],
+      ),
+    );
+  }
+
+  Widget _stepCard(int num, IconData icon, String title, String desc) {
+    return Container(
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: AppTheme.cardDark,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+            color: AppTheme.accentOrange.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        children: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  gradient: AppTheme.accentGradient,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                        color: AppTheme.accentOrange.withValues(alpha: 0.3),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6))
+                  ],
+                ),
+                child: Icon(icon, color: Colors.white, size: 28),
+              ),
+              Positioned(
+                top: -4,
+                right: -4,
+                child: Container(
+                  width: 22,
+                  height: 22,
+                  decoration: const BoxDecoration(
+                    color: AppTheme.backgroundDark,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      '$num',
+                      style: const TextStyle(
+                          color: AppTheme.accentOrange,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(title,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center),
+          const SizedBox(height: 8),
+          Text(desc,
+              style: const TextStyle(
+                  color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
+              textAlign: TextAlign.center),
+        ],
+      ),
+    );
+  }
+
+  Widget _stepArrow() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 32),
+      child: Icon(Icons.arrow_forward_rounded,
+          color: AppTheme.accentOrange.withValues(alpha: 0.5), size: 28),
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // ROLES SECTION
+  // ════════════════════════════════════════════════════════════════════════════
+  Widget _buildRolesSection(bool isWide) {
+    final roles = [
+      _RoleData(
+        icon: Icons.manage_accounts_rounded,
+        color: AppTheme.accentOrange,
+        title: 'Gestionnaire',
+        subtitle: 'Chef d\'agence',
+        permissions: [
+          'Tableau de bord complet de l\'agence',
+          'Suivi des agents et des opérations',
+          'Rapports financiers journaliers',
+          'Gestion des retraits et ristournes',
+          'Ajout et gestion de l\'équipe',
+        ],
+      ),
+      _RoleData(
+        icon: Icons.supervisor_account_rounded,
+        color: AppTheme.success,
+        title: 'Contrôleur',
+        subtitle: 'Superviseur terrain',
+        permissions: [
+          'Validation des points journaliers',
+          'Calcul automatique des ristournes',
+          'Supervision des agents assignés',
+          'Rapports de contrôle détaillés',
+          'Historique des validations',
+        ],
+      ),
+      _RoleData(
+        icon: Icons.person_rounded,
+        color: AppTheme.mtnYellow,
+        title: 'Agent',
+        subtitle: 'Opérateur terrain',
+        permissions: [
+          'Saisie des opérations quotidiennes',
+          'Suivi de son solde en temps réel',
+          'Historique de ses transactions',
+          'Rapport journalier personnel',
+          'Accès MTN, Moov et Celtiis',
+        ],
+      ),
+    ];
+
+    return Container(
+      padding: EdgeInsets.symmetric(
+          horizontal: isWide ? 80 : 24, vertical: 80),
+      child: Column(
+        children: [
+          _sectionHeader(
+            'Chaque acteur à sa place',
+            'Gestion des rôles',
+            'SikaFlow adapte l\'interface et les permissions selon le rôle de chaque membre de votre équipe.',
+          ),
+          const SizedBox(height: 56),
+          isWide
+              ? Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: roles
+                      .map((r) => SizedBox(
+                          width: 300,
+                          child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              child: _roleCard(r))))
+                      .toList(),
+                )
+              : Column(
+                  children: roles
+                      .map((r) => Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: _roleCard(r)))
+                      .toList(),
+                ),
+        ],
+      ),
+    );
+  }
+
+  Widget _roleCard(_RoleData r) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.cardDark,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: r.color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: r.color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(r.icon, color: r.color, size: 24),
+          ),
+          const SizedBox(height: 14),
+          Text(r.title,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold)),
+          Text(r.subtitle,
+              style: TextStyle(color: r.color, fontSize: 12)),
+          const SizedBox(height: 12),
+          ...r.permissions.map((p) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle_rounded, color: r.color, size: 14),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(p,
+                          style: const TextStyle(
+                              color: AppTheme.textSecondary,
+                              fontSize: 12,
+                              height: 1.4)),
+                    ),
+                  ],
+                ),
+              )),
+        ],
+      ),
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // PRICING SECTION
+  // ════════════════════════════════════════════════════════════════════════════
+  Widget _buildPricingSection(bool isWide) {
+    return Container(
+      color: AppTheme.cardDarker,
+      padding: EdgeInsets.symmetric(
+          horizontal: isWide ? 80 : 24, vertical: 80),
+      child: Column(
+        children: [
+          _sectionHeader(
+            'Transparent et abordable',
+            'Tarification',
+            'Un prix simple, sans frais cachés. Commencez gratuitement, payez seulement quand vous en avez besoin.',
+          ),
+          const SizedBox(height: 56),
+          isWide
+              ? Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(width: 340, child: _pricingCardEssai()),
+                    const SizedBox(width: 24),
+                    SizedBox(width: 340, child: _pricingCardPro()),
+                  ],
+                )
+              : Column(
+                  children: [
+                    _pricingCardEssai(),
+                    const SizedBox(height: 20),
+                    _pricingCardPro(),
+                  ],
+                ),
+          const SizedBox(height: 32),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.success.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                  color: AppTheme.success.withValues(alpha: 0.3)),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.info_outline,
+                    color: AppTheme.success, size: 18),
+                SizedBox(width: 10),
+                Flexible(
+                  child: Text(
+                    'Paiement par Mobile Money (MTN MoMo, Moov Money) ou manuellement via l\'admin',
+                    style: TextStyle(
+                        color: AppTheme.success,
+                        fontSize: 13),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pricingCardEssai() {
+    return Container(
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: AppTheme.cardDark,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppTheme.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            decoration: BoxDecoration(
+              color: AppTheme.success.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Text('GRATUIT',
+                style: TextStyle(
+                    color: AppTheme.success,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11)),
+          ),
+          const SizedBox(height: 16),
+          const Text('Période d\'essai',
+              style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('0',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 48,
+                      fontWeight: FontWeight.w900)),
+              Padding(
+                padding: EdgeInsets.only(bottom: 10, left: 4),
+                child: Text('FCFA / 30 jours',
+                    style: TextStyle(
+                        color: AppTheme.textSecondary, fontSize: 14)),
+              ),
+            ],
+          ),
+          const Divider(color: AppTheme.divider, height: 32),
+          ...[
+            'Accès complet à toutes les fonctionnalités',
+            'Nombre illimité d\'opérations',
+            'Tous les rôles (Agent, Contrôleur, Gestionnaire)',
+            'Synchronisation temps réel',
+            'Support par email',
+          ].map((item) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_circle,
+                        color: AppTheme.success, size: 16),
+                    const SizedBox(width: 10),
+                    Expanded(
+                        child: Text(item,
+                            style: const TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontSize: 13))),
+                  ],
+                ),
+              )),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const InscriptionScreen()),
+              ),
+              style: OutlinedButton.styleFrom(
+                side:
+                    const BorderSide(color: AppTheme.success, width: 1.5),
+                foregroundColor: AppTheme.success,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Commencer l\'essai gratuit',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pricingCardPro() {
+    return Container(
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppTheme.primaryNavy, Color(0xFF1A3A5C)],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+            color: AppTheme.accentOrange.withValues(alpha: 0.5), width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.accentOrange.withValues(alpha: 0.15),
+            blurRadius: 30,
+            spreadRadius: 5,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  gradient: AppTheme.accentGradient,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text('RECOMMANDÉ',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Text('Plan Professionnel',
+              style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('5 000',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 48,
+                      fontWeight: FontWeight.w900)),
+              Padding(
+                padding: EdgeInsets.only(bottom: 10, left: 4),
+                child: Text('FCFA / 6 mois',
+                    style: TextStyle(
+                        color: AppTheme.textSecondary, fontSize: 14)),
+              ),
+            ],
+          ),
+          Container(
+            margin: const EdgeInsets.only(top: 4, bottom: 16),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppTheme.accentOrange.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Text('≈ 833 FCFA/mois',
+                style: TextStyle(
+                    color: AppTheme.accentOrange,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600)),
+          ),
+          const Divider(color: AppTheme.divider, height: 24),
+          ...[
+            'Tout l\'essai gratuit +',
+            'Accès illimité sur 6 mois',
+            'Multi-agents sans limite',
+            'Rapports PDF et Excel',
+            'Alertes et notifications',
+            'Support prioritaire',
+          ].map((item) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_circle,
+                        color: AppTheme.accentOrange, size: 16),
+                    const SizedBox(width: 10),
+                    Expanded(
+                        child: Text(item,
+                            style: const TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontSize: 13))),
+                  ],
+                ),
+              )),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const InscriptionScreen()),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.accentOrange,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                elevation: 4,
+                shadowColor:
+                    AppTheme.accentOrange.withValues(alpha: 0.4),
+              ),
+              child: const Text('Choisir ce plan',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // OPERATEURS
+  // ════════════════════════════════════════════════════════════════════════════
+  Widget _buildOperateursSection() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 48),
+      child: Column(
+        children: [
+          Text(
+            'COMPATIBLE AVEC',
+            style: TextStyle(
+              color: AppTheme.textHint,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 2.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Les 3 opérateurs Mobile Money du Bénin',
+            style: TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 32),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 20,
+            runSpacing: 20,
+            children: [
+              _opLogoCard(
+                name: 'MTN Mobile Money',
+                logoAsset: 'assets/logos/mtn_momo.png',
+                color: AppTheme.mtnYellow,
+                bgColor: const Color(0xFFFFCC00),
+                subtitle: 'MTN MoMo',
+              ),
+              _opLogoCard(
+                name: 'Moov Money',
+                logoAsset: 'assets/logos/moov_money.png',
+                color: AppTheme.moovBlue,
+                bgColor: const Color(0xFF0055A5),
+                subtitle: 'Flooz',
+              ),
+              _opLogoCard(
+                name: 'Celtiis Cash',
+                logoAsset: 'assets/logos/celtiis_cash.png',
+                color: AppTheme.celtiisRed,
+                bgColor: const Color(0xFFE30613),
+                subtitle: 'Celtiis Cash',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _opLogoCard({
+    required String name,
+    required String logoAsset,
+    required Color color,
+    required Color bgColor,
+    required String subtitle,
+  }) {
+    return Container(
+      width: 160,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.cardDark,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.08),
+            blurRadius: 16,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Logo circle avec image locale (asset)
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: color.withValues(alpha: 0.35), width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.15),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: ClipOval(
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Image.asset(
+                  logoAsset,
+                  width: 56,
+                  height: 56,
+                  fit: BoxFit.contain,
+                  errorBuilder: (ctx, err, st) => Center(
+                    child: Text(
+                      name.substring(0, 1),
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            name,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              subtitle,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _opChip(String name, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Text(name,
+          style: TextStyle(
+              color: color, fontWeight: FontWeight.bold, fontSize: 14)),
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // CTA SECTION
+  // ════════════════════════════════════════════════════════════════════════════
+  Widget _buildCTASection() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      padding: const EdgeInsets.all(48),
+      decoration: BoxDecoration(
+        gradient: AppTheme.accentGradient,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.accentOrange.withValues(alpha: 0.3),
+            blurRadius: 40,
+            spreadRadius: 5,
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          const Text(
+            'Prêt à digitaliser votre\nMobile Money ?',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 32,
+              fontWeight: FontWeight.w900,
+              height: 1.2,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Rejoignez des centaines d\'agences Mobile Money au Bénin\nqui font confiance à SikaFlow.',
+            style: TextStyle(
+                color: Colors.white70, fontSize: 15, height: 1.6),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 32),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 16,
+            runSpacing: 12,
+            children: [
+              ElevatedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const InscriptionScreen()),
+                ),
+                icon: const Icon(Icons.rocket_launch, size: 18),
+                label: const Text('Créer mon compte'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: AppTheme.accentOrange,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 28, vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  textStyle: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                ),
+                icon: const Icon(Icons.login),
+                label: const Text('Me connecter'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side:
+                      const BorderSide(color: Colors.white70, width: 1.5),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 28, vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  textStyle: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // FOOTER
+  // ════════════════════════════════════════════════════════════════════════════
+  Widget _buildFooter(bool isWide) {
+    return Container(
+      color: AppTheme.cardDarker,
+      padding: EdgeInsets.symmetric(
+          horizontal: isWide ? 80 : 24, vertical: 48),
+      child: Column(
+        children: [
+          isWide
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 3, child: _footerBrand()),
+                    Expanded(flex: 2, child: _footerLinks('Produit', ['Fonctionnalités', 'Tarification', 'Sécurité'])),
+                    Expanded(flex: 2, child: _footerLinks('Liens', ['À propos', 'Contact', 'Conditions d\'utilisation'])),
+                    Expanded(flex: 2, child: _footerContact()),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _footerBrand(),
+                    const SizedBox(height: 32),
+                    _footerContact(),
+                  ],
+                ),
+          const SizedBox(height: 40),
+          const Divider(color: AppTheme.divider),
+          const SizedBox(height: 24),
+          const Text(
+            '© 2025 SikaFlow — GFPEANC. Tous droits réservés. Solution Mobile Money Bénin.',
+            style: TextStyle(color: AppTheme.textHint, fontSize: 13),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _footerBrand() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.asset(
+                  'assets/icon/app_icon.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.account_balance_wallet,
+                    color: AppTheme.accentOrange,
+                    size: 24,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Text(
+              'SikaFlow',
+              style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        const Text(
+          'Système de gestion des opérations\nMobile Money au Bénin.',
+          style: TextStyle(
+              color: AppTheme.textSecondary, fontSize: 13, height: 1.6),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            _socialIcon(Icons.language, 'sikaflow.org'),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _footerLinks(String title, List<String> links) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title,
+            style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 14)),
+        const SizedBox(height: 14),
+        ...links.map((l) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text(l,
+                  style: const TextStyle(
+                      color: AppTheme.textSecondary, fontSize: 13)),
+            )),
+      ],
+    );
+  }
+
+  Widget _footerContact() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Contact',
+            style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 14)),
+        const SizedBox(height: 14),
+        _contactRow(Icons.email_outlined, 'contact@sikaflow.org'),
+        const SizedBox(height: 8),
+        _contactRow(Icons.location_on_outlined, 'Cotonou, Bénin'),
+        const SizedBox(height: 8),
+        _contactRow(Icons.web, 'sikaflow.org'),
+      ],
+    );
+  }
+
+  Widget _contactRow(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, color: AppTheme.accentOrange, size: 16),
+        const SizedBox(width: 8),
+        Text(text,
+            style: const TextStyle(
+                color: AppTheme.textSecondary, fontSize: 13)),
+      ],
+    );
+  }
+
+  Widget _socialIcon(IconData icon, String label) {
+    return Row(
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: AppTheme.cardDark,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppTheme.divider),
+          ),
+          child: Icon(icon, color: AppTheme.textSecondary, size: 16),
+        ),
+        const SizedBox(width: 8),
+        Text(label,
+            style: const TextStyle(
+                color: AppTheme.textSecondary, fontSize: 12)),
+      ],
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // HELPER
+  // ════════════════════════════════════════════════════════════════════════════
+  Widget _sectionHeader(String title, String badge, String subtitle) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppTheme.accentOrange.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+                color: AppTheme.accentOrange.withValues(alpha: 0.3)),
+          ),
+          child: Text(
+            badge.toUpperCase(),
+            style: const TextStyle(
+                color: AppTheme.accentOrange,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.2),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          title,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 32,
+            fontWeight: FontWeight.w900,
+            height: 1.2,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 12),
+        Text(
+          subtitle,
+          style: const TextStyle(
+              color: AppTheme.textSecondary, fontSize: 15, height: 1.6),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+}
+
+// ── Data Classes ──────────────────────────────────────────────────────────────
+class _FeatureData {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String description;
+  const _FeatureData(
+      {required this.icon,
+      required this.color,
+      required this.title,
+      required this.description});
+}
+
+class _RoleData {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+  final List<String> permissions;
+  const _RoleData(
+      {required this.icon,
+      required this.color,
+      required this.title,
+      required this.subtitle,
+      required this.permissions});
+}

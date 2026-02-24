@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // OTP verifications — accessible sans authentification (inscription)
+    match /otp_verifications/{email} {
+      allow read, write: if true;
+    }
+    
+    // Users — lecture/écriture par utilisateur authentifié
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Entreprises — gestionnaire authentifié
+    match /entreprises/{entrepriseId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
+    // Toutes les autres collections — authentification requise
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "246919869370",
+    "project_id": "sikaflow-c8869",
+    "storage_bucket": "sikaflow-c8869.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:246919869370:android:05d629e08dce5196252383",
+        "android_client_info": {
+          "package_name": "com.mobilemoneycontrol.control"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-YY2qUVN7GadnAYWVkiyqfu3dd7m-_Qo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
