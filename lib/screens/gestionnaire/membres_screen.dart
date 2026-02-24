@@ -58,177 +58,233 @@ class _MembresScreenState extends State<MembresScreen> with SingleTickerProvider
 
   // ─── Dialog ajout membre ───────────────────────────────────────────────────
   void _dialogAjouterMembre(BuildContext context, String role) {
-    final nomCtrl = TextEditingController();
+    final nomCtrl    = TextEditingController();
     final prenomCtrl = TextEditingController();
-    final identCtrl = TextEditingController();
-    bool estEmail = false;
-    final formKey = GlobalKey<FormState>();
-    bool chargement = false;
+    final telCtrl    = TextEditingController();
+    final emailCtrl  = TextEditingController();
+    final formKey    = GlobalKey<FormState>();
+    bool chargement  = false;
     Map<String, String>? resultat;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppTheme.cardDark,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 20, right: 20, top: 20),
+          padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              left: 20, right: 20, top: 20),
           child: resultat != null
               ? _buildSuccessSheet(ctx, resultat!, role)
               : Form(
                   key: formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: (role == 'agent' ? AppTheme.success : AppTheme.moovBlue).withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Icon(
-                              role == 'agent' ? Icons.person_rounded : Icons.verified_user_rounded,
-                              color: role == 'agent' ? AppTheme.success : AppTheme.moovBlue,
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            'Ajouter un ${role == 'agent' ? 'Agent' : 'Contrôleur'}',
-                            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 18),
-                      Row(
-                        children: [
-                          Expanded(child: _champ(prenomCtrl, 'Prénom', Icons.person_outline_rounded)),
-                          const SizedBox(width: 10),
-                          Expanded(child: _champ(nomCtrl, 'Nom', Icons.badge_outlined)),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      // Toggle téléphone / email
-                      Container(
-                        decoration: BoxDecoration(color: AppTheme.cardDarker, borderRadius: BorderRadius.circular(10)),
-                        child: Row(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // ── Titre ──
+                        Row(
                           children: [
-                            Expanded(
-                              child: GestureDetector(
-                                onTap: () => setS(() => estEmail = false),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 10),
-                                  decoration: BoxDecoration(
-                                    color: !estEmail ? AppTheme.accentOrange : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.phone_android_rounded, color: !estEmail ? Colors.white : AppTheme.textHint, size: 16),
-                                      const SizedBox(width: 6),
-                                      Text('Téléphone', style: TextStyle(color: !estEmail ? Colors.white : AppTheme.textHint, fontSize: 13, fontWeight: FontWeight.w600)),
-                                    ],
-                                  ),
-                                ),
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: (role == 'agent'
+                                        ? AppTheme.success
+                                        : AppTheme.moovBlue)
+                                    .withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                role == 'agent'
+                                    ? Icons.person_rounded
+                                    : Icons.verified_user_rounded,
+                                color: role == 'agent'
+                                    ? AppTheme.success
+                                    : AppTheme.moovBlue,
+                                size: 20,
                               ),
                             ),
-                            Expanded(
-                              child: GestureDetector(
-                                onTap: () => setS(() => estEmail = true),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 10),
-                                  decoration: BoxDecoration(
-                                    color: estEmail ? AppTheme.accentOrange : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.email_outlined, color: estEmail ? Colors.white : AppTheme.textHint, size: 16),
-                                      const SizedBox(width: 6),
-                                      Text('Email', style: TextStyle(color: estEmail ? Colors.white : AppTheme.textHint, fontSize: 13, fontWeight: FontWeight.w600)),
-                                    ],
-                                  ),
-                                ),
-                              ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Ajouter un ${role == 'agent' ? 'Agent' : 'Contrôleur'}',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold),
                             ),
                           ],
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      TextFormField(
-                        controller: identCtrl,
-                        keyboardType: estEmail ? TextInputType.emailAddress : TextInputType.phone,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          labelText: estEmail ? 'Adresse email' : 'Numéro de téléphone',
-                          prefixIcon: Icon(estEmail ? Icons.email_outlined : Icons.phone_android_rounded),
+                        const SizedBox(height: 18),
+
+                        // ── Prénom / Nom ──
+                        Row(
+                          children: [
+                            Expanded(child: _champ(prenomCtrl, 'Prénom', Icons.person_outline_rounded)),
+                            const SizedBox(width: 10),
+                            Expanded(child: _champ(nomCtrl, 'Nom', Icons.badge_outlined)),
+                          ],
                         ),
-                        validator: (v) {
-                          if (v == null || v.isEmpty) return 'Champ requis';
-                          if (!estEmail && v.length < 8) return 'Numéro invalide';
-                          if (estEmail && !v.contains('@')) return 'Email invalide';
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        '⚠ Un code provisoire sera généré. Transmettez-le à l\'intéressé(e) pour sa première connexion.',
-                        style: TextStyle(color: AppTheme.warning, fontSize: 11),
-                      ),
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: chargement
-                              ? null
-                              : () async {
-                                  if (!formKey.currentState!.validate()) return;
-                                  setS(() => chargement = true);
-                                  final provider = context.read<AppProvider>();
-                                  Map<String, String>? res;
-                                  if (role == 'agent') {
-                                    res = await provider.ajouterAgent(
-                                      nom: nomCtrl.text.trim(),
-                                      prenom: prenomCtrl.text.trim(),
-                                      identifiant: identCtrl.text.trim(),
-                                      estEmail: estEmail,
-                                    );
-                                  } else {
-                                    res = await provider.ajouterControleur(
-                                      nom: nomCtrl.text.trim(),
-                                      prenom: prenomCtrl.text.trim(),
-                                      identifiant: identCtrl.text.trim(),
-                                      estEmail: estEmail,
-                                    );
-                                  }
-                                  setS(() {
-                                    chargement = false;
-                                    if (res != null) {
-                                      resultat = res;
+                        const SizedBox(height: 12),
+
+                        // ── Téléphone (format Bénin) ──
+                        TextFormField(
+                          controller: telCtrl,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            labelText: 'Téléphone',
+                            prefixIcon: const Icon(Icons.phone_android_rounded),
+                            prefix: Container(
+                              margin: const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppTheme.accentOrange.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text('+229 01',
+                                  style: TextStyle(
+                                      color: AppTheme.accentOrange,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13)),
+                            ),
+                            hintText: '12 34 56 78',
+                            hintStyle: const TextStyle(color: AppTheme.textHint),
+                          ),
+                          maxLength: 8,
+                          validator: (v) {
+                            if (v == null || v.isEmpty) return 'Téléphone requis';
+                            if (v.length != 8) return '8 chiffres après +229 01';
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 8),
+
+                        // ── Email ──
+                        TextFormField(
+                          controller: emailCtrl,
+                          keyboardType: TextInputType.emailAddress,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: const InputDecoration(
+                            labelText: 'Adresse email',
+                            prefixIcon: Icon(Icons.email_outlined),
+                            hintText: 'exemple@email.com',
+                          ),
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return 'Email requis';
+                            final reg = RegExp(
+                                r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$');
+                            if (!reg.hasMatch(v.trim())) return 'Format email invalide';
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+
+                        // ── Info invitation ──
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppTheme.accentOrange.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                                color: AppTheme.accentOrange.withValues(alpha: 0.25)),
+                          ),
+                          child: const Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(Icons.email_rounded,
+                                  color: AppTheme.accentOrange, size: 18),
+                              SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Un email d\'invitation sera envoyé à cette adresse. '
+                                  'La personne devra cliquer sur le lien et définir son mot de passe '
+                                  'avant sa première connexion.',
+                                  style: TextStyle(
+                                      color: AppTheme.textSecondary,
+                                      fontSize: 12,
+                                      height: 1.4),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // ── Bouton AJOUTER ──
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: chargement
+                                ? null
+                                : () async {
+                                    if (!formKey.currentState!.validate()) return;
+                                    setS(() => chargement = true);
+                                    final provider = context.read<AppProvider>();
+                                    Map<String, String>? res;
+                                    final tel = '+22901${telCtrl.text.trim()}';
+                                    final email = emailCtrl.text.trim();
+                                    if (role == 'agent') {
+                                      res = await provider.ajouterAgent(
+                                        nom: nomCtrl.text.trim(),
+                                        prenom: prenomCtrl.text.trim(),
+                                        telephone: tel,
+                                        email: email,
+                                      );
+                                    } else {
+                                      res = await provider.ajouterControleur(
+                                        nom: nomCtrl.text.trim(),
+                                        prenom: prenomCtrl.text.trim(),
+                                        telephone: tel,
+                                        email: email,
+                                      );
                                     }
-                                  });
-                                  if (res == null && ctx.mounted) {
-                                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-                                      content: Text('Cet identifiant est déjà enregistré'),
-                                      backgroundColor: AppTheme.error,
-                                      behavior: SnackBarBehavior.floating,
-                                    ));
-                                  }
-                                },
-                          icon: chargement
-                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                              : const Icon(Icons.person_add_rounded),
-                          label: const Text('AJOUTER'),
+                                    setS(() {
+                                      chargement = false;
+                                      if (res != null && res['erreur'] == null) {
+                                        resultat = res;
+                                      }
+                                    });
+                                    if (res == null && ctx.mounted) {
+                                      ScaffoldMessenger.of(ctx).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                              'Erreur lors de l\'ajout. Vérifiez les informations.'),
+                                          backgroundColor: AppTheme.error,
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
+                                      );
+                                    } else if (res != null &&
+                                        res['erreur'] != null &&
+                                        ctx.mounted) {
+                                      ScaffoldMessenger.of(ctx).showSnackBar(
+                                        SnackBar(
+                                          content: Text(res['erreur']!),
+                                          backgroundColor: AppTheme.error,
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
+                                      );
+                                      setS(() => chargement = false);
+                                    }
+                                  },
+                            icon: chargement
+                                ? const SizedBox(
+                                    width: 18, height: 18,
+                                    child: CircularProgressIndicator(
+                                        color: Colors.white, strokeWidth: 2))
+                                : const Icon(Icons.person_add_rounded),
+                            label: Text(chargement
+                                ? 'Envoi de l\'invitation...'
+                                : 'AJOUTER & ENVOYER INVITATION'),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 20),
-                    ],
+                        const SizedBox(height: 24),
+                      ],
+                    ),
                   ),
                 ),
         ),
@@ -237,55 +293,121 @@ class _MembresScreenState extends State<MembresScreen> with SingleTickerProvider
   }
 
   Widget _buildSuccessSheet(BuildContext ctx, Map<String, String> res, String role) {
+    final email       = res['email'] ?? '';
+    final prenom      = res['prenom'] ?? '';
+    final nom         = res['nom'] ?? '';
+    final telephone   = res['telephone'] ?? '';
+    final mdpTemp     = res['mdp_temp'] ?? '';
+    final emailEnvoye = res['email_envoye'] == 'true';
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.check_circle_rounded, color: AppTheme.success, size: 56),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
+        // ── Icône succès ──
+        Container(
+          width: 72, height: 72,
+          decoration: BoxDecoration(
+            color: AppTheme.success.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+            border: Border.all(color: AppTheme.success.withValues(alpha: 0.4), width: 2),
+          ),
+          child: const Icon(Icons.check_rounded, color: AppTheme.success, size: 38),
+        ),
+        const SizedBox(height: 16),
         Text(
-          '${role == 'agent' ? 'Agent' : 'Contrôleur'} ajouté avec succès !',
-          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+          '${role == 'agent' ? 'Agent' : 'Contrôleur'} ajouté !',
+          style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
           textAlign: TextAlign.center,
         ),
+        const SizedBox(height: 6),
+        Text(
+          '$prenom $nom',
+          style: const TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+        ),
         const SizedBox(height: 20),
+
+        // ── Statut email ──
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: AppTheme.warning.withValues(alpha: 0.1),
+            color: emailEnvoye
+                ? AppTheme.success.withValues(alpha: 0.08)
+                : AppTheme.warning.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppTheme.warning.withValues(alpha: 0.3)),
+            border: Border.all(
+              color: emailEnvoye
+                  ? AppTheme.success.withValues(alpha: 0.25)
+                  : AppTheme.warning.withValues(alpha: 0.25),
+            ),
           ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+              Row(
                 children: [
-                  Icon(Icons.vpn_key_rounded, color: AppTheme.warning, size: 18),
-                  SizedBox(width: 8),
-                  Text('Code provisoire à transmettre', style: TextStyle(color: AppTheme.warning, fontWeight: FontWeight.bold, fontSize: 13)),
+                  Icon(
+                    emailEnvoye ? Icons.mark_email_read_rounded : Icons.email_outlined,
+                    color: emailEnvoye ? AppTheme.success : AppTheme.warning,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    emailEnvoye
+                        ? 'Email d\'invitation envoyé'
+                        : 'Transmettez le code manuellement',
+                    style: TextStyle(
+                      color: emailEnvoye ? AppTheme.success : AppTheme.warning,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
+              _infoLigne(Icons.email_outlined, 'Email', email),
+              _infoLigne(Icons.phone_android_rounded, 'Téléphone', telephone),
+              const SizedBox(height: 10),
+
+              // ── Code provisoire ──
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
-                  color: AppTheme.cardDarker,
+                  color: AppTheme.backgroundDark,
                   borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppTheme.accentOrange.withValues(alpha: 0.4)),
                 ),
-                child: Text(
-                  res['mdpProvisoire'] ?? '',
-                  style: const TextStyle(
-                    color: AppTheme.accentOrange,
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 4,
-                  ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Code provisoire', style: TextStyle(color: AppTheme.textHint, fontSize: 11)),
+                        const SizedBox(height: 2),
+                        Text(
+                          mdpTemp,
+                          style: const TextStyle(
+                            color: AppTheme.accentOrange,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 4,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Icon(Icons.key_rounded, color: AppTheme.accentOrange, size: 22),
+                  ],
                 ),
               ),
-              const SizedBox(height: 8),
-              const Text(
-                'Cette personne devra changer ce code à sa première connexion.',
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-                textAlign: TextAlign.center,
+              const SizedBox(height: 10),
+              Text(
+                emailEnvoye
+                    ? 'La personne recevra un email avec un lien pour définir son mot de passe. '
+                      'Le code ci-dessus peut aussi être communiqué directement.'
+                    : 'Communiquez ce code à la personne. Elle l\'utilisera lors de sa première connexion '
+                      'pour définir son propre mot de passe.',
+                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4),
               ),
             ],
           ),
@@ -293,13 +415,33 @@ class _MembresScreenState extends State<MembresScreen> with SingleTickerProvider
         const SizedBox(height: 20),
         SizedBox(
           width: double.infinity,
-          child: ElevatedButton(
+          child: ElevatedButton.icon(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('FERMER'),
+            icon: const Icon(Icons.done_rounded),
+            label: const Text('FERMER'),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.success),
           ),
         ),
         const SizedBox(height: 20),
       ],
+    );
+  }
+
+  Widget _infoLigne(IconData icon, String label, String valeur) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: AppTheme.textHint),
+          const SizedBox(width: 8),
+          Text('$label : ', style: const TextStyle(color: AppTheme.textHint, fontSize: 12)),
+          Expanded(
+            child: Text(valeur,
+                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis),
+          ),
+        ],
+      ),
     );
   }
 

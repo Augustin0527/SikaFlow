@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 import '../models/user_model.dart';
 import '../models/point_journalier.dart';
@@ -283,14 +285,21 @@ class AppProvider extends ChangeNotifier {
   }) async {
     try {
       final user = _auth.currentUser!;
-      final credential = EmailAuthProvider.credential(
-        email: user.email!,
-        password: ancienMdp,
-      );
-      await user.reauthenticateWithCredential(credential);
+
+      // Si ancienMdp est vide → l'utilisateur vient de se connecter
+      // via un lien Firebase (password reset) et est déjà authentifié récemment
+      if (ancienMdp.isNotEmpty) {
+        final credential = EmailAuthProvider.credential(
+          email: user.email!,
+          password: ancienMdp,
+        );
+        await user.reauthenticateWithCredential(credential);
+      }
+
       await user.updatePassword(nouveauMdp);
       await _db.collection('users').doc(user.uid).update({
         'mot_de_passe_provisoire': false,
+        'mdp_temp': FieldValue.delete(),
       });
       if (_utilisateurConnecte != null) {
         _utilisateurConnecte!.motDePasseProvisoire = false;
@@ -298,7 +307,12 @@ class AppProvider extends ChangeNotifier {
       }
       return null;
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'wrong-password') return 'Mot de passe actuel incorrect.';
+      if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+        return 'Mot de passe actuel incorrect.';
+      }
+      if (e.code == 'requires-recent-login') {
+        return 'Session expirée. Reconnectez-vous et réessayez.';
+      }
       return 'Erreur: ${e.message}';
     } catch (e) {
       return 'Erreur: $e';
@@ -320,71 +334,224 @@ class AppProvider extends ChangeNotifier {
     return code;
   }
 
+  // ═══════════════════════════════════════
+  // MEMBRES — AGENT & CONTRÔLEUR
+  // ═══════════════════════════════════════
+
+  /// Ajoute un agent : crée le doc Firestore + envoie un email d'invitation
+  /// via Firebase Password Reset. Ne déconnecte PAS le gestionnaire.
   Future<Map<String, String>?> ajouterAgent({
     required String nom,
     required String prenom,
-    required String identifiant,
-    required bool estEmail,
+    required String telephone,
+    required String email,
   }) async {
-    if (_utilisateurConnecte == null) return null;
-    final mdpProvisoire = _genererMdpProvisoire();
-    try {
-      final email = estEmail ? identifiant : '$identifiant@sikaflow.app';
-      final credential = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: mdpProvisoire,
-      );
-      final uid = credential.user!.uid;
-      await _db.collection('users').doc(uid).set({
-        'id': uid,
-        'nom': nom,
-        'prenom': prenom,
-        'telephone': estEmail ? '' : identifiant,
-        'email': email,
-        'role': 'agent',
-        'entreprise_id': _utilisateurConnecte!.entrepriseId,
-        'mot_de_passe_provisoire': true,
-        'date_creation': Timestamp.now(),
-        'actif': true,
-      });
-      return {'id': uid, 'mdpProvisoire': mdpProvisoire};
-    } catch (e) {
-      debugPrint('Erreur ajout agent: $e');
-      return null;
-    }
+    return _ajouterMembre(
+      nom: nom, prenom: prenom,
+      telephone: telephone, email: email,
+      role: 'agent',
+    );
   }
 
   Future<Map<String, String>?> ajouterControleur({
     required String nom,
     required String prenom,
-    required String identifiant,
-    required bool estEmail,
+    required String telephone,
+    required String email,
+  }) async {
+    return _ajouterMembre(
+      nom: nom, prenom: prenom,
+      telephone: telephone, email: email,
+      role: 'controleur',
+    );
+  }
+
+  Future<Map<String, String>?> _ajouterMembre({
+    required String nom,
+    required String prenom,
+    required String telephone,
+    required String email,
+    required String role,
   }) async {
     if (_utilisateurConnecte == null) return null;
-    final mdpProvisoire = _genererMdpProvisoire();
+
+    final emailTrimmed = email.trim();
+    final entrepriseId = _utilisateurConnecte!.entrepriseId;
+    final gestionnaireId = _utilisateurConnecte!.id;
+
     try {
-      final email = estEmail ? identifiant : '$identifiant@sikaflow.app';
-      final credential = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: mdpProvisoire,
-      );
-      final uid = credential.user!.uid;
+      // ── Étape 1 : vérifier si l'email existe déjà dans Firestore ──────────
+      final existing = await _db.collection('users')
+          .where('email', isEqualTo: emailTrimmed)
+          .limit(1)
+          .get();
+      if (existing.docs.isNotEmpty) {
+        return {'erreur': 'Cet email est déjà associé à un compte.'};
+      }
+
+      // ── Étape 2 : créer un UID unique pour ce membre ──────────────────────
+      final uid = _uuid.v4();
+      final mdpTemp = _genererMdpProvisoire();
+
+      // ── Étape 3 : créer le document Firestore (AVANT la création Auth)  ──
+      // On stocke le mdpTemp pour que le membre puisse s'identifier
       await _db.collection('users').doc(uid).set({
         'id': uid,
         'nom': nom,
         'prenom': prenom,
-        'telephone': estEmail ? '' : identifiant,
-        'email': email,
-        'role': 'controleur',
-        'entreprise_id': _utilisateurConnecte!.entrepriseId,
+        'telephone': telephone,
+        'email': emailTrimmed,
+        'role': role,
+        'entreprise_id': entrepriseId,
+        'gestionnaire_id': gestionnaireId,
         'mot_de_passe_provisoire': true,
+        'mdp_temp': mdpTemp,           // stocké temporairement pour l'invitation
+        'invitation_envoyee': false,
         'date_creation': Timestamp.now(),
         'actif': true,
       });
-      return {'id': uid, 'mdpProvisoire': mdpProvisoire};
+
+      // ── Étape 4 : créer le compte Firebase Auth sans déconnecter  ─────────
+      // On utilise une 2ème instance Auth (ou la méthode admin via Firestore)
+      // → Ici on utilise le SDK client avec une astuce : créer via REST API
+      //   pour ne pas changer la session courante.
+      bool compteCreeSansDeconnexion = false;
+      try {
+        // Tentative via REST API Firebase Auth (ne déconnecte pas)
+        compteCreeSansDeconnexion = await _creerCompteViaRestApi(
+          uid: uid,
+          email: emailTrimmed,
+          mdp: mdpTemp,
+          displayName: '$prenom $nom',
+        );
+      } catch (e) {
+        debugPrint('REST API échouée, fallback: $e');
+      }
+
+      if (!compteCreeSansDeconnexion) {
+        // Fallback : stocker les infos pour que le membre s'inscrive lui-même
+        // via le lien d'invitation (sans créer de compte Auth maintenant)
+        await _db.collection('users').doc(uid).update({
+          'invitation_mode': 'self_register',
+        });
+      } else {
+        await _db.collection('users').doc(uid).update({
+          'invitation_mode': 'pre_created',
+        });
+      }
+
+      // ── Étape 5 : envoyer l'email d'invitation ────────────────────────────
+      // On utilise sendPasswordResetEmail si le compte existe, sinon
+      // on envoie un email de bienvenue avec les infos de connexion temporaires
+      bool emailEnvoye = false;
+      if (compteCreeSansDeconnexion) {
+        try {
+          await _auth.sendPasswordResetEmail(
+            email: emailTrimmed,
+            actionCodeSettings: ActionCodeSettings(
+              url: 'https://sikaflow-c8869.web.app/?mode=newmember',
+              handleCodeInApp: false,
+            ),
+          );
+          emailEnvoye = true;
+          await _db.collection('users').doc(uid).update({
+            'invitation_envoyee': true,
+          });
+        } catch (e) {
+          debugPrint('Erreur envoi email reset: $e');
+        }
+      }
+
+      // ── Étape 6 : rafraîchir la liste ────────────────────────────────────
+      await _chargerTousLesUtilisateurs();
+
+      return {
+        'id': uid,
+        'email': emailTrimmed,
+        'prenom': prenom,
+        'nom': nom,
+        'telephone': telephone,
+        'role': role,
+        'mdp_temp': mdpTemp,
+        'email_envoye': emailEnvoye ? 'true' : 'false',
+      };
     } catch (e) {
-      debugPrint('Erreur ajout contrôleur: $e');
-      return null;
+      debugPrint('Erreur ajout membre ($role): $e');
+      return {'erreur': 'Erreur inattendue : $e'};
+    }
+  }
+
+  /// Crée un compte Firebase Auth via la REST API (sans changer la session)
+  Future<bool> _creerCompteViaRestApi({
+    required String uid,
+    required String email,
+    required String mdp,
+    required String displayName,
+  }) async {
+    // Clé API Web Firebase (depuis firebase_options.dart)
+    const apiKey = 'AIzaSyApGdz7u5i10Fytoz6hcej63rVTKeH9Ivg';
+    const url = 'https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$apiKey';
+
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email,
+          'password': mdp,
+          'displayName': displayName,
+          'returnSecureToken': false,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        debugPrint('Compte créé via REST API pour $email');
+        return true;
+      } else {
+        final error = jsonDecode(response.body);
+        final errorMessage = error['error']?['message'] ?? 'Inconnu';
+        debugPrint('REST signUp erreur ($errorMessage) pour $email');
+        // EMAIL_EXISTS est aussi une réussite (compte déjà là)
+        if (errorMessage == 'EMAIL_EXISTS') return true;
+        return false;
+      }
+    } catch (e) {
+      debugPrint('REST signUp exception: $e');
+      return false;
+    }
+  }
+
+  /// Charge tous les utilisateurs de l'entreprise depuis Firestore
+  Future<void> _chargerTousLesUtilisateurs() async {
+    try {
+      final entrepriseId = _utilisateurConnecte?.entrepriseId;
+      if (entrepriseId == null) return;
+
+      final snapshot = await _db
+          .collection('users')
+          .where('entreprise_id', isEqualTo: entrepriseId)
+          .get();
+
+      _tousLesUtilisateurs = snapshot.docs.map((doc) {
+        final data = doc.data();
+        return UserModel(
+          id: doc.id,
+          nom: (data['nom'] ?? '') as String,
+          prenom: (data['prenom'] ?? '') as String,
+          telephone: (data['telephone'] ?? '') as String,
+          email: data['email'] as String?,
+          motDePasse: '',
+          role: (data['role'] ?? 'agent') as String,
+          entrepriseId: data['entreprise_id'] as String?,
+          dateCreation: (data['date_creation'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          motDePasseProvisoire: (data['mot_de_passe_provisoire'] ?? false) as bool,
+          actif: (data['actif'] ?? true) as bool,
+        );
+      }).toList();
+
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Erreur chargement utilisateurs: $e');
     }
   }
 

@@ -20,6 +20,8 @@ class _ChangerMotDePasseScreenState extends State<ChangerMotDePasseScreen> {
   bool _nouveauVisible = false;
   bool _confirmVisible = false;
   bool _chargement = false;
+  // Si true, le mdp provisoire n'est pas demandé (utilisateur connecté via lien Firebase)
+  bool _sessionRecente = false;
 
   @override
   void dispose() {
@@ -34,8 +36,11 @@ class _ChangerMotDePasseScreenState extends State<ChangerMotDePasseScreen> {
     setState(() => _chargement = true);
 
     final provider = context.read<AppProvider>();
+    // Si session récente, on passe une chaîne vide pour l'ancien mdp
+    final ancienMdp = _sessionRecente ? '' : _ancienCtrl.text;
+
     final erreur = await provider.changerMotDePasse(
-      ancienMdp: _ancienCtrl.text,
+      ancienMdp: ancienMdp,
       nouveauMdp: _nouveauCtrl.text,
     );
 
@@ -43,6 +48,16 @@ class _ChangerMotDePasseScreenState extends State<ChangerMotDePasseScreen> {
     if (!mounted) return;
 
     if (erreur != null) {
+      // Si erreur de session, proposer de re-tenter avec le mdp provisoire
+      if (erreur.contains('Session expirée') && _sessionRecente) {
+        setState(() => _sessionRecente = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Veuillez entrer votre code provisoire pour continuer.'),
+          backgroundColor: AppTheme.warning,
+          behavior: SnackBarBehavior.floating,
+        ));
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(erreur),
         backgroundColor: AppTheme.error,
@@ -52,7 +67,7 @@ class _ChangerMotDePasseScreenState extends State<ChangerMotDePasseScreen> {
     }
 
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Text('Mot de passe modifié avec succès !'),
+      content: Text('Mot de passe défini avec succès !'),
       backgroundColor: AppTheme.success,
       behavior: SnackBarBehavior.floating,
     ));
@@ -81,30 +96,30 @@ class _ChangerMotDePasseScreenState extends State<ChangerMotDePasseScreen> {
             children: [
               if (widget.obligatoire) ...[
                 const SizedBox(height: 20),
-                // Bannière d'avertissement
+                // Bannière de bienvenue
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [AppTheme.warning.withValues(alpha: 0.2), AppTheme.warning.withValues(alpha: 0.05)],
+                      colors: [AppTheme.accentOrange.withValues(alpha: 0.2), AppTheme.accentOrange.withValues(alpha: 0.05)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppTheme.warning.withValues(alpha: 0.4)),
+                    border: Border.all(color: AppTheme.accentOrange.withValues(alpha: 0.4)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.security_rounded, color: AppTheme.warning, size: 32),
+                      const Icon(Icons.security_rounded, color: AppTheme.accentOrange, size: 32),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Sécurité requise', style: TextStyle(color: AppTheme.warning, fontWeight: FontWeight.bold, fontSize: 16)),
+                            const Text('Bienvenue sur SikaFlow !', style: TextStyle(color: AppTheme.accentOrange, fontWeight: FontWeight.bold, fontSize: 16)),
                             const SizedBox(height: 4),
                             Text(
-                              'Bienvenue ${user?.prenom ?? ''} ! Vous devez définir votre propre mot de passe pour continuer.',
+                              'Bonjour ${user?.prenom ?? ''} ! Définissez votre mot de passe personnel pour accéder à l\'application.',
                               style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
                             ),
                           ],
@@ -113,7 +128,7 @@ class _ChangerMotDePasseScreenState extends State<ChangerMotDePasseScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
                 // Infos compte
                 Container(
                   padding: const EdgeInsets.all(14),
@@ -131,7 +146,7 @@ class _ChangerMotDePasseScreenState extends State<ChangerMotDePasseScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Center(child: Text(
-                          '${user?.prenom[0] ?? ''}${user?.nom[0] ?? ''}',
+                          '${user?.prenom.isNotEmpty == true ? user!.prenom[0] : ''}${user?.nom.isNotEmpty == true ? user!.nom[0] : ''}',
                           style: TextStyle(color: _roleCouleur(user?.role ?? ''), fontWeight: FontWeight.bold, fontSize: 16),
                         )),
                       ),
@@ -141,16 +156,54 @@ class _ChangerMotDePasseScreenState extends State<ChangerMotDePasseScreen> {
                         children: [
                           Text(user?.nomComplet ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
                           Text(user?.roleLibelle ?? '', style: TextStyle(color: _roleCouleur(user?.role ?? ''), fontSize: 12)),
-                          if (user?.telephone.isNotEmpty == true)
-                            Text(user!.telephone, style: const TextStyle(color: AppTheme.textHint, fontSize: 11)),
+                          if (user?.email?.isNotEmpty == true)
+                            Text(user!.email!, style: const TextStyle(color: AppTheme.textHint, fontSize: 11)),
                         ],
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 16),
+                // Option session récente
+                GestureDetector(
+                  onTap: () => setState(() => _sessionRecente = !_sessionRecente),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _sessionRecente
+                          ? AppTheme.success.withValues(alpha: 0.1)
+                          : AppTheme.cardDark,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _sessionRecente
+                            ? AppTheme.success.withValues(alpha: 0.4)
+                            : AppTheme.divider,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _sessionRecente ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+                          color: _sessionRecente ? AppTheme.success : AppTheme.textHint,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Text(
+                            'J\'ai cliqué sur le lien dans l\'email d\'invitation',
+                            style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
               ],
-              const Text('Nouveau mot de passe', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+              Text(
+                widget.obligatoire ? 'Définir votre mot de passe' : 'Nouveau mot de passe',
+                style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 6),
               const Text('Votre mot de passe doit contenir au moins 6 caractères.', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
               const SizedBox(height: 24),
@@ -158,16 +211,18 @@ class _ChangerMotDePasseScreenState extends State<ChangerMotDePasseScreen> {
                 key: _formKey,
                 child: Column(
                   children: [
-                    // Mot de passe provisoire (actuel)
-                    _champPass(
-                      ctrl: _ancienCtrl,
-                      label: widget.obligatoire ? 'Code provisoire reçu' : 'Mot de passe actuel',
-                      hint: widget.obligatoire ? 'Entrez le code transmis par votre gestionnaire' : null,
-                      visible: _ancienVisible,
-                      onToggle: () => setState(() => _ancienVisible = !_ancienVisible),
-                      icon: Icons.vpn_key_rounded,
-                    ),
-                    const SizedBox(height: 14),
+                    // Mot de passe provisoire — caché si session récente
+                    if (!_sessionRecente) ...[
+                      _champPass(
+                        ctrl: _ancienCtrl,
+                        label: widget.obligatoire ? 'Code provisoire reçu par email' : 'Mot de passe actuel',
+                        hint: widget.obligatoire ? 'Code envoyé par votre gestionnaire' : null,
+                        visible: _ancienVisible,
+                        onToggle: () => setState(() => _ancienVisible = !_ancienVisible),
+                        icon: Icons.vpn_key_rounded,
+                      ),
+                      const SizedBox(height: 14),
+                    ],
                     _champPass(
                       ctrl: _nouveauCtrl,
                       label: 'Nouveau mot de passe',
@@ -200,7 +255,7 @@ class _ChangerMotDePasseScreenState extends State<ChangerMotDePasseScreen> {
                         icon: _chargement
                             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                             : const Icon(Icons.check_circle_rounded),
-                        label: Text(_chargement ? 'En cours...' : 'CONFIRMER'),
+                        label: Text(_chargement ? 'En cours...' : 'CONFIRMER LE MOT DE PASSE'),
                       ),
                     ),
                     if (!widget.obligatoire) ...[
