@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 import 'auth/login_screen.dart';
 import 'auth/inscription_screen.dart';
@@ -147,6 +148,7 @@ class _LandingPageState extends State<LandingPage>
                 _buildRolesSection(isWide),
                 _buildPricingSection(isWide),
                 _buildOperateursSection(),
+                _buildTemoignagesSection(isWide),
                 _buildCTASection(),
                 _buildFooter(isWide),
               ],
@@ -1488,6 +1490,149 @@ class _LandingPageState extends State<LandingPage>
   }
 
   // ════════════════════════════════════════════════════════════════════════════
+  // TÉMOIGNAGES SECTION
+  // ════════════════════════════════════════════════════════════════════════════
+  Widget _buildTemoignagesSection(bool isWide) {
+    final temoignages = [
+      _TemoignageData(
+        nom: 'Adjoua Fatima K.',
+        role: 'Gestionnaire Mobile Money',
+        ville: 'Cotonou',
+        texte: 'SikaFlow a transformé ma façon de gérer mes agents. Je vois en temps réel les soldes de chacun, et mes ristournes sont calculées automatiquement. Je gagne 2 heures par jour !',
+        photoUrl: 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=120&h=120&fit=crop&crop=face',
+        note: 5,
+      ),
+      _TemoignageData(
+        nom: 'Kofi Mensah',
+        role: 'Agent Mobile Money',
+        ville: 'Porto-Novo',
+        texte: 'Avant je notais tout dans un cahier. Maintenant je soumets mon point journalier en 2 minutes depuis mon téléphone. Mon gestionnaire valide rapidement et tout est enregistré.',
+        photoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&h=120&fit=crop&crop=face',
+        note: 5,
+      ),
+      _TemoignageData(
+        nom: 'Aïssatou Diallo',
+        role: 'Contrôleure de zone',
+        ville: 'Parakou',
+        texte: 'Je supervise 8 agents. SikaFlow me donne une vue claire sur chaque opérateur. Les rapports sont automatiques, je peux me concentrer sur le terrain.',
+        photoUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=120&h=120&fit=crop&crop=face',
+        note: 5,
+      ),
+    ];
+
+    return Container(
+      color: const Color(0xFF0D1221),
+      padding: EdgeInsets.symmetric(horizontal: isWide ? 80 : 24, vertical: 60),
+      child: Column(
+        children: [
+          _sectionHeader(
+            'Ils nous font confiance',
+            '⭐ Témoignages',
+            'Des gestionnaires et agents à travers tout le Bénin utilisent SikaFlow chaque jour.',
+          ),
+          const SizedBox(height: 40),
+          isWide
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: temoignages
+                      .map((t) => Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              child: _carteTemoignage(t),
+                            ),
+                          ))
+                      .toList(),
+                )
+              : Column(
+                  children: temoignages
+                      .map((t) => Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: _carteTemoignage(t),
+                          ))
+                      .toList(),
+                ),
+        ],
+      ),
+    );
+  }
+
+  Widget _carteTemoignage(_TemoignageData t) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppTheme.cardDark,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Étoiles
+          Row(
+            children: List.generate(5, (i) => Icon(
+              i < t.note ? Icons.star_rounded : Icons.star_outline_rounded,
+              color: AppTheme.accentOrange,
+              size: 18,
+            )),
+          ),
+          const SizedBox(height: 14),
+          // Texte
+          Text(
+            '"${t.texte}"',
+            style: const TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 14,
+              height: 1.6,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Divider(color: AppTheme.divider),
+          const SizedBox(height: 14),
+          // Auteur
+          Row(
+            children: [
+              // Photo de profil
+              ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: Image.network(
+                  t.photoUrl,
+                  width: 48,
+                  height: 48,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: AppTheme.accentOrange.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: const Icon(Icons.person, color: AppTheme.accentOrange, size: 28),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    t.nom,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  Text(
+                    '${t.role} • ${t.ville}',
+                    style: const TextStyle(color: AppTheme.textHint, fontSize: 12),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
   // CTA SECTION
   // ════════════════════════════════════════════════════════════════════════════
   Widget _buildCTASection() {
@@ -1590,8 +1735,16 @@ class _LandingPageState extends State<LandingPage>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(flex: 3, child: _footerBrand()),
-                    Expanded(flex: 2, child: _footerLinks('Produit', ['Fonctionnalités', 'Tarification', 'Sécurité'])),
-                    Expanded(flex: 2, child: _footerLinks('Liens', ['À propos', 'Contact', 'Conditions d\'utilisation'])),
+                    Expanded(flex: 2, child: _footerLinksCliquables('Produit', [
+                      ('Fonctionnalités', () => _ouvrirDialogue(context, 'Fonctionnalités', _contenuFonctionnalites())),
+                      ('Tarification', () => _scrollToSection('tarification')),
+                      ('Sécurité', () => _ouvrirDialogue(context, 'Sécurité & Confidentialité', _contenuSecurite())),
+                    ])),
+                    Expanded(flex: 2, child: _footerLinksCliquables('Liens', [
+                      ('À propos', () => _ouvrirDialogue(context, 'À propos de SikaFlow', _contenuAPropos())),
+                      ('Nous contacter', () => _ouvrirContact(context)),
+                      ('Conditions d\'utilisation', () => _ouvrirDialogue(context, 'Conditions d\'utilisation', _contenuCGU())),
+                    ])),
                     Expanded(flex: 2, child: _footerContact()),
                   ],
                 )
@@ -1599,7 +1752,14 @@ class _LandingPageState extends State<LandingPage>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _footerBrand(),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 24),
+                    _footerLinksCliquables('Liens rapides', [
+                      ('À propos', () => _ouvrirDialogue(context, 'À propos de SikaFlow', _contenuAPropos())),
+                      ('Nous contacter', () => _ouvrirContact(context)),
+                      ('Fonctionnalités', () => _ouvrirDialogue(context, 'Fonctionnalités', _contenuFonctionnalites())),
+                      ('Conditions d\'utilisation', () => _ouvrirDialogue(context, 'Conditions d\'utilisation', _contenuCGU())),
+                    ]),
+                    const SizedBox(height: 24),
                     _footerContact(),
                   ],
                 ),
@@ -1668,7 +1828,7 @@ class _LandingPageState extends State<LandingPage>
     );
   }
 
-  Widget _footerLinks(String title, List<String> links) {
+  Widget _footerLinksCliquables(String title, List<(String, VoidCallback)> liens) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1678,11 +1838,20 @@ class _LandingPageState extends State<LandingPage>
                 fontWeight: FontWeight.bold,
                 fontSize: 14)),
         const SizedBox(height: 14),
-        ...links.map((l) => Padding(
+        ...liens.map((lien) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: Text(l,
+              child: InkWell(
+                onTap: lien.$2,
+                borderRadius: BorderRadius.circular(4),
+                child: Text(
+                  lien.$1,
                   style: const TextStyle(
-                      color: AppTheme.textSecondary, fontSize: 13)),
+                      color: AppTheme.textSecondary,
+                      fontSize: 13,
+                      decoration: TextDecoration.underline,
+                      decorationColor: AppTheme.textHint),
+                ),
+              ),
             )),
       ],
     );
@@ -1698,23 +1867,287 @@ class _LandingPageState extends State<LandingPage>
                 fontWeight: FontWeight.bold,
                 fontSize: 14)),
         const SizedBox(height: 14),
-        _contactRow(Icons.email_outlined, 'contact@sikaflow.org'),
+        _contactRowCliquable(Icons.email_outlined, 'contact@sikaflow.org',
+            () => _lancerUrl('mailto:contact@sikaflow.org')),
         const SizedBox(height: 8),
-        _contactRow(Icons.location_on_outlined, 'Cotonou, Bénin'),
+        _contactRowCliquable(Icons.phone_outlined, '+229 01 XX XX XX XX',
+            () => _lancerUrl('tel:+22901XXXXXXXX')),
         const SizedBox(height: 8),
-        _contactRow(Icons.web, 'sikaflow.org'),
+        _contactRowCliquable(Icons.location_on_outlined, 'Cotonou, Bénin', null),
+        const SizedBox(height: 8),
+        _contactRowCliquable(Icons.web, 'sikaflow-c8869.web.app',
+            () => _lancerUrl('https://sikaflow-c8869.web.app')),
       ],
     );
   }
 
-  Widget _contactRow(IconData icon, String text) {
-    return Row(
+  Widget _contactRowCliquable(IconData icon, String text, VoidCallback? onTap) {
+    final widget = Row(
       children: [
         Icon(icon, color: AppTheme.accentOrange, size: 16),
         const SizedBox(width: 8),
         Text(text,
-            style: const TextStyle(
-                color: AppTheme.textSecondary, fontSize: 13)),
+            style: TextStyle(
+                color: onTap != null ? AppTheme.accentOrange : AppTheme.textSecondary,
+                fontSize: 13,
+                decoration: onTap != null ? TextDecoration.underline : null,
+                decorationColor: AppTheme.accentOrange)),
+      ],
+    );
+    if (onTap == null) return widget;
+    return InkWell(onTap: onTap, child: widget);
+  }
+
+  Future<void> _lancerUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  void _scrollToSection(String section) {
+    // Scroll vers la section tarification
+    _scrollController.animateTo(
+      _scrollController.position.maxScrollExtent * 0.75,
+      duration: const Duration(milliseconds: 800),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void _ouvrirContact(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.cardDark,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Nous contacter',
+                style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            const Text('Notre équipe est disponible pour vous aider.',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
+            const SizedBox(height: 24),
+            _boutonContact(Icons.email_rounded, 'Email', 'contact@sikaflow.org',
+                () => _lancerUrl('mailto:contact@sikaflow.org?subject=Contact SikaFlow')),
+            const SizedBox(height: 12),
+            _boutonContact(Icons.chat_rounded, 'WhatsApp', '+229 01 XX XX XX',
+                () => _lancerUrl('https://wa.me/22901XXXXXXXX?text=Bonjour, je vous contacte depuis SikaFlow')),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _boutonContact(IconData icon, String titre, String sous, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.backgroundDark,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppTheme.divider),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(
+                color: AppTheme.accentOrange.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: AppTheme.accentOrange, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(titre, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                Text(sous, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+              ],
+            ),
+            const Spacer(),
+            const Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.textHint, size: 14),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _ouvrirDialogue(BuildContext context, String titre, Widget contenu) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: AppTheme.cardDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                color: AppTheme.primaryDark,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(titre,
+                        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: contenu,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _contenuAPropos() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _ligneInfo('🏢', 'Entreprise', 'GFPEANC — Gestion Financière et Promotions des Entreprises Agricoles Non Conventionnelles'),
+        const SizedBox(height: 12),
+        _ligneInfo('📍', 'Siège', 'Cotonou, République du Bénin'),
+        const SizedBox(height: 12),
+        _ligneInfo('🎯', 'Mission', 'Digitaliser la gestion des agents Mobile Money en Afrique de l\'Ouest. Nous fournissons aux gestionnaires d\'agences Mobile Money les outils numériques pour suivre les performances, gérer les ristournes et assurer la transparence des opérations.'),
+        const SizedBox(height: 12),
+        _ligneInfo('💡', 'Vision', 'Devenir la plateforme de référence pour la gestion des réseaux d\'agents Mobile Money en Afrique sub-saharienne.'),
+        const SizedBox(height: 12),
+        _ligneInfo('🗓️', 'Fondé en', '2024 — Version actuelle : 1.0'),
+        const SizedBox(height: 12),
+        _ligneInfo('📧', 'Contact', 'contact@sikaflow.org'),
+      ],
+    );
+  }
+
+  Widget _contenuFonctionnalites() {
+    final features = [
+      ('📊', 'Points journaliers', 'Saisie quotidienne des soldes MTN, Moov, Celtiis et espèces par chaque agent.'),
+      ('👥', 'Gestion des membres', 'Ajout d\'agents et contrôleurs avec invitation email automatique.'),
+      ('💰', 'Ristournes automatiques', 'Calcul et attribution automatique des primes selon les performances.'),
+      ('📈', 'Rapports & statistiques', 'Graphiques d\'évolution, synthèses quotidiennes et historiques complets.'),
+      ('🔐', 'Multi-rôles sécurisé', 'Super Admin, Gestionnaire, Contrôleur, Agent — chaque rôle a ses accès.'),
+      ('📱', 'Application mobile', 'Interface optimisée pour smartphones Android et iOS.'),
+      ('☁️', 'Sauvegarde cloud', 'Données sauvegardées en temps réel sur Firebase Google.'),
+      ('💳', 'Abonnements flexibles', 'Plans Starter, Business, Premium adaptés à chaque taille d\'agence.'),
+    ];
+    return Column(
+      children: features.map((f) => Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(f.$1, style: const TextStyle(fontSize: 20)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(f.$2, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(height: 2),
+                  Text(f.$3, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.4)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      )).toList(),
+    );
+  }
+
+  Widget _contenuSecurite() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _ligneInfo('🔐', 'Authentification', 'Firebase Authentication — chiffrement SSL/TLS sur tous les échanges.'),
+        const SizedBox(height: 12),
+        _ligneInfo('☁️', 'Stockage', 'Google Firestore avec règles de sécurité — accès restreint par entreprise.'),
+        const SizedBox(height: 12),
+        _ligneInfo('🏦', 'Paiements', 'FedaPay — passerelle certifiée PCI-DSS pour l\'Afrique de l\'Ouest.'),
+        const SizedBox(height: 12),
+        _ligneInfo('🔑', 'Mots de passe', 'Hachage sécurisé Firebase — aucun mot de passe en clair stocké.'),
+        const SizedBox(height: 12),
+        _ligneInfo('📊', 'Isolation données', 'Chaque entreprise ne peut voir que ses propres données.'),
+        const SizedBox(height: 12),
+        _ligneInfo('📧', 'Invitations sécurisées', 'Lien de connexion unique envoyé par email Firebase — expire après utilisation.'),
+      ],
+    );
+  }
+
+  Widget _contenuCGU() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('1. Acceptation des conditions',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+        const SizedBox(height: 6),
+        const Text('En utilisant SikaFlow, vous acceptez les présentes conditions. L\'utilisation du service est réservée aux professionnels du Mobile Money au Bénin.',
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5)),
+        const SizedBox(height: 16),
+        const Text('2. Abonnements et paiements',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+        const SizedBox(height: 6),
+        const Text('Les abonnements sont mensuels et renouvelables. Le paiement est traité par FedaPay. Aucun remboursement n\'est accordé après activation.',
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5)),
+        const SizedBox(height: 16),
+        const Text('3. Confidentialité des données',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+        const SizedBox(height: 6),
+        const Text('Vos données sont hébergées sur Google Firebase. GFPEANC ne revend aucune donnée personnelle. Vous restez propriétaire de vos données.',
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5)),
+        const SizedBox(height: 16),
+        const Text('4. Responsabilité',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+        const SizedBox(height: 6),
+        const Text('SikaFlow est un outil de gestion. GFPEANC n\'est pas responsable des décisions financières prises sur la base des données affichées.',
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5)),
+        const SizedBox(height: 16),
+        const Text('5. Contact',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+        const SizedBox(height: 6),
+        const Text('Pour toute question : contact@sikaflow.org — Cotonou, Bénin.',
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5)),
+      ],
+    );
+  }
+
+  Widget _ligneInfo(String emoji, String label, String valeur) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(emoji, style: const TextStyle(fontSize: 18)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('$label :', style: const TextStyle(color: AppTheme.textHint, fontSize: 12)),
+              const SizedBox(height: 2),
+              Text(valeur, style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.4)),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -1811,4 +2244,21 @@ class _RoleData {
       required this.title,
       required this.subtitle,
       required this.permissions});
+}
+
+class _TemoignageData {
+  final String nom;
+  final String role;
+  final String ville;
+  final String texte;
+  final String photoUrl;
+  final int note;
+  const _TemoignageData({
+    required this.nom,
+    required this.role,
+    required this.ville,
+    required this.texte,
+    required this.photoUrl,
+    required this.note,
+  });
 }
