@@ -6,11 +6,17 @@ import '../models/abonnement_model.dart';
 /// Service FedaPay — intégration REST API paiement mobile
 /// Documentation : https://docs.fedapay.com/api-reference
 class FedaPayService {
-  // ── Clés API ─────────────────────────────────────────────────────────────
-  static const String _publicKey  = 'pk_sandbox_2K2AondxI9XxopQtAuyObQou';
-  static const String _secretKey  = 'sk_sandbox_0Sc5tu7Q6Q350sMOKnmGsp9U';
-  static const String _baseUrl    = 'https://sandbox.fedapay.com/v1';
-  static const String _checkoutUrl = 'https://sandbox.fedapay.com';
+  // ── Clés API LIVE (production) ───────────────────────────────────────────
+  static const String _publicKey   = 'pk_live_nOsysdVj9bE_YttzbGopEs4a';
+  static const String _secretKey   = 'sk_live_9a0WW-AFpfIfOYTFruNSEzOD';
+  static const String _baseUrl     = 'https://live.fedapay.com/v1';
+  static const String _checkoutUrl = 'https://live.fedapay.com';
+
+  // ── Clés SANDBOX (tests) — décommenter pour revenir en mode test ──────────
+  // static const String _publicKey   = 'pk_sandbox_2K2AondxI9XxopQtAuyObQou';
+  // static const String _secretKey   = 'sk_sandbox_0Sc5tu7Q6Q350sMOKnmGsp9U';
+  // static const String _baseUrl     = 'https://sandbox.fedapay.com/v1';
+  // static const String _checkoutUrl = 'https://sandbox.fedapay.com';
 
   // ── Headers d'authentification ────────────────────────────────────────────
   static Map<String, String> get _headers => {
