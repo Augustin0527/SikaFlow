@@ -722,6 +722,7 @@ class _AbonnementScreenState extends State<AbonnementScreen>
         transactionId: resultat.transactionId!,
         reference: resultat.reference ?? '',
       );
+      if (!mounted) return;
       _tabCtrl.animateTo(1);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('🎉 Abonnement activé avec succès !'),

@@ -1487,20 +1487,6 @@ class _LandingPageState extends State<LandingPage>
     );
   }
 
-  Widget _opChip(String name, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Text(name,
-          style: TextStyle(
-              color: color, fontWeight: FontWeight.bold, fontSize: 14)),
-    );
-  }
-
   // ════════════════════════════════════════════════════════════════════════════
   // CTA SECTION
   // ════════════════════════════════════════════════════════════════════════════

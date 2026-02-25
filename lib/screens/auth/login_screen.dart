@@ -271,8 +271,9 @@ class _LoginScreenState extends State<LoginScreen>
                 if (v == null || v.trim().isEmpty) return 'Email requis';
                 final reg = RegExp(
                     r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$');
-                if (!reg.hasMatch(v.trim()))
+                if (!reg.hasMatch(v.trim())) {
                   return 'Format email invalide';
+                }
                 return null;
               },
             ),

@@ -34,7 +34,6 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
   // Étape 2 — Vérification email
   // On crée un compte temporaire Firebase pour envoyer l'email de vérification
   User? _tempUser;
-  bool _verificationEnvoyee = false;
   bool _verificationEnCours = false;
   int  _secondesRestants = 0;
 
@@ -103,7 +102,6 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
       );
 
       setState(() {
-        _verificationEnvoyee = true;
         _secondesRestants = 60;
         _etape = 1;
       });
