@@ -10,6 +10,7 @@ import '../models/point_journalier.dart';
 import '../models/ristourne.dart';
 import '../models/retrait.dart';
 import '../models/entreprise_model.dart';
+import '../models/abonnement_model.dart';
 
 class AppProvider extends ChangeNotifier {
   final _uuid = const Uuid();
@@ -19,12 +20,16 @@ class AppProvider extends ChangeNotifier {
   UserModel? _utilisateurConnecte;
   EntrepriseModel? _entrepriseActive;
   List<UserModel> _tousLesUtilisateurs = [];
-  List<EntrepriseModel> _entreprises = [];
+  final List<EntrepriseModel> _entreprises = [];
   List<PointJournalier> _pointsJournaliers = [];
   List<Ristourne> _ristournes = [];
   List<Retrait> _retraits = [];
   bool _chargement = false;
   String? _erreur;
+
+  // ── Abonnements ──────────────────────────────────────────────────────────
+  AbonnementModel? _abonnementActif;
+  List<AbonnementModel> _historiqueAbonnements = [];
 
   UserModel? get utilisateurConnecte => _utilisateurConnecte;
   EntrepriseModel? get entrepriseActive => _entrepriseActive;
@@ -37,6 +42,12 @@ class AppProvider extends ChangeNotifier {
   String? get erreur => _erreur;
   bool get estConnecte => _utilisateurConnecte != null;
   bool get aucuneEntrepriseExiste => false;
+
+  // Abonnement getters
+  AbonnementModel? get abonnementActif => _abonnementActif;
+  List<AbonnementModel> get historiqueAbonnements => _historiqueAbonnements;
+  bool get abonnementValide => _abonnementActif?.estActif ?? false;
+  PlanAbonnement get planActuel => _abonnementActif?.plan ?? PlanAbonnement.essai;
 
   // ═══════════════════════════════════════
   // INITIALISATION — écoute Firebase Auth
@@ -689,5 +700,114 @@ class AppProvider extends ChangeNotifier {
     if (montant >= 1000000) return '${(montant / 1000000).toStringAsFixed(1)} M FCFA';
     if (montant >= 1000) return '${(montant / 1000).toStringAsFixed(0)} K FCFA';
     return '${montant.toStringAsFixed(0)} FCFA';
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ABONNEMENTS
+  // ═══════════════════════════════════════════════════════════════
+
+  /// Charge l'abonnement actif + historique depuis Firestore
+  Future<void> chargerAbonnements() async {
+    final entrepriseId = _utilisateurConnecte?.entrepriseId;
+    if (entrepriseId == null) return;
+    try {
+      final snap = await _db
+          .collection('abonnements')
+          .where('entreprise_id', isEqualTo: entrepriseId)
+          .get();
+
+      final tous = snap.docs
+          .map((d) => AbonnementModel.fromFirestore(d.data()))
+          .toList()
+        ..sort((a, b) => b.dateCreation.compareTo(a.dateCreation));
+
+      _historiqueAbonnements = tous;
+
+      // Trouver l'abonnement actif le plus récent
+      try {
+        _abonnementActif = tous.firstWhere((a) => a.estActif);
+      } catch (_) {
+        // Sinon prendre le plus récent même expiré
+        _abonnementActif = tous.isNotEmpty ? tous.first : _creerAbonnementEssaiDepuisEntreprise();
+      }
+
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Erreur chargement abonnements: $e');
+      // Créer un abonnement d'essai local si Firestore échoue
+      _abonnementActif = _creerAbonnementEssaiDepuisEntreprise();
+      notifyListeners();
+    }
+  }
+
+  /// Crée un AbonnementModel essai à partir des données Firestore de l'entreprise
+  AbonnementModel? _creerAbonnementEssaiDepuisEntreprise() {
+    final entreprise = _entrepriseActive;
+    final user = _utilisateurConnecte;
+    if (entreprise == null || user == null) return null;
+    final debut = entreprise.dateCreation;
+    return AbonnementModel(
+      id: 'essai_${entreprise.id}',
+      entrepriseId: entreprise.id,
+      gestionnaireId: user.id,
+      plan: PlanAbonnement.essai,
+      statut: StatutAbonnement.actif,
+      dateDebut: debut,
+      dateExpiration: debut.add(const Duration(days: 30)),
+      montantPaye: 0,
+      dateCreation: debut,
+    );
+  }
+
+  /// Enregistre un abonnement payé dans Firestore
+  Future<String?> enregistrerAbonnement({
+    required PlanAbonnement plan,
+    required String transactionId,
+    required String reference,
+  }) async {
+    final user = _utilisateurConnecte;
+    final entreprise = _entrepriseActive;
+    if (user == null || entreprise == null) return 'Utilisateur non connecté.';
+
+    try {
+      final maintenant = DateTime.now();
+      final expiration = maintenant.add(Duration(days: plan.dureeJours));
+      final id = _uuid.v4();
+
+      final abonnement = AbonnementModel(
+        id: id,
+        entrepriseId: entreprise.id,
+        gestionnaireId: user.id,
+        plan: plan,
+        statut: StatutAbonnement.actif,
+        dateDebut: maintenant,
+        dateExpiration: expiration,
+        montantPaye: plan.prix.toDouble(),
+        fedapayTransactionId: transactionId,
+        fedapayReference: reference,
+        dateCreation: maintenant,
+      );
+
+      // Sauvegarder dans Firestore
+      await _db.collection('abonnements').doc(id).set(abonnement.toFirestore());
+
+      // Mettre à jour l'entreprise avec le plan actif
+      await _db.collection('entreprises').doc(entreprise.id).update({
+        'statut': plan.code,
+        'plan': plan.code,
+        'date_expiration_abonnement': expiration.toIso8601String(),
+        'date_fin_essai': expiration.toIso8601String(),
+      });
+
+      // Mettre à jour localement
+      _abonnementActif = abonnement;
+      _historiqueAbonnements = [abonnement, ..._historiqueAbonnements];
+      notifyListeners();
+
+      return null;
+    } catch (e) {
+      debugPrint('Erreur enregistrement abonnement: $e');
+      return 'Erreur : $e';
+    }
   }
 }

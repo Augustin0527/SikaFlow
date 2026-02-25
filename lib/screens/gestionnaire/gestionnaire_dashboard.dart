@@ -9,6 +9,8 @@ import 'membres_screen.dart';
 import '../controleur/ristournes_screen.dart';
 import 'rapports_screen.dart';
 import '../auth/changer_mdp_screen.dart';
+import 'abonnement_screen.dart';
+import '../../models/abonnement_model.dart';
 
 class GestionnaireDashboard extends StatefulWidget {
   const GestionnaireDashboard({super.key});
@@ -83,6 +85,8 @@ class _GestionnaireDashboardState extends State<GestionnaireDashboard> {
               padding: const EdgeInsets.all(16),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
+                  // ── Bannière alerte abonnement ──
+                  _buildBanniereAbonnement(provider),
                   // Carte synthèse principale
                   _buildSyntheseCard(synth, provider),
                   const SizedBox(height: 16),
@@ -155,14 +159,84 @@ class _GestionnaireDashboardState extends State<GestionnaireDashboard> {
                 onSelected: (v) {
                   if (v == 'mdp') {
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const ChangerMotDePasseScreen()));
+                  } else if (v == 'abonnement') {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const AbonnementScreen()));
                   }
                 },
                 itemBuilder: (_) => [
                   const PopupMenuItem(value: 'mdp', child: Row(children: [Icon(Icons.lock_reset_rounded, color: AppTheme.accentOrange, size: 18), SizedBox(width: 8), Text('Changer mot de passe', style: TextStyle(color: Colors.white, fontSize: 13))])),
+                  const PopupMenuItem(value: 'abonnement', child: Row(children: [Icon(Icons.subscriptions_rounded, color: AppTheme.accentOrange, size: 18), SizedBox(width: 8), Text('Abonnement', style: TextStyle(color: Colors.white, fontSize: 13))])),
                 ],
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  // ── Bannière alerte abonnement ─────────────────────────────────────────
+  Widget _buildBanniereAbonnement(AppProvider provider) {
+    final abonnement = provider.abonnementActif;
+    if (abonnement == null) return const SizedBox.shrink();
+
+    final joursRestants = abonnement.joursRestants;
+    final estEssai = abonnement.plan == PlanAbonnement.essai;
+
+    // Afficher seulement si < 7 jours restants ou expiré
+    if (joursRestants > 7 && abonnement.estActif) return const SizedBox.shrink();
+
+    final bool estExpire = !abonnement.estActif || joursRestants < 0;
+    final couleur = estExpire ? AppTheme.error : AppTheme.warning;
+    final icone = estExpire ? Icons.error_rounded : Icons.warning_amber_rounded;
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const AbonnementScreen()),
+      ),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: couleur.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: couleur.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          children: [
+            Icon(icone, color: couleur, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    estExpire
+                        ? 'Abonnement expiré !'
+                        : estEssai
+                            ? 'Essai gratuit — $joursRestants jour(s) restant(s)'
+                            : 'Abonnement — $joursRestants jour(s) restant(s)',
+                    style: TextStyle(color: couleur, fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  Text(
+                    estExpire
+                        ? 'Renouvelez pour continuer à utiliser SikaFlow'
+                        : 'Cliquez pour renouveler votre abonnement',
+                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: couleur,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Text('Renouveler', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+            ),
+          ],
         ),
       ),
     );
