@@ -156,7 +156,7 @@ class _OperationsScreenState extends State<OperationsScreen> {
                 style: const TextStyle(
                     color: _textPrim,
                     fontWeight: FontWeight.w600, fontSize: 13)),
-            Text(op.standNom ?? '',
+            Text(op.standNom,
                 style: const TextStyle(color: _textSec, fontSize: 11)),
             if (op.numeroClient != null || op.nomClient != null)
               Text(

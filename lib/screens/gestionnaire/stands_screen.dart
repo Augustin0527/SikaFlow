@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/app_provider.dart';
 import '../../models/stand_model.dart';
-import '../../models/operation_model.dart';
 import '../../models/entreprise_model.dart';
 import '../../theme/app_theme.dart';
 

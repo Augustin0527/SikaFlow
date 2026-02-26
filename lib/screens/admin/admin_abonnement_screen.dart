@@ -575,7 +575,7 @@ class _AdminAbonnementScreenState extends State<AdminAbonnementScreen> {
         Row(children: [
           Switch(
             value: _montantPersonnaliseActif,
-            activeColor: _orange,
+            activeTrackColor: _orange,
             onChanged: (v) => setState(() {
               _montantPersonnaliseActif = v;
               if (v) _montantPersonnalise = _prixCalcule.toDouble();

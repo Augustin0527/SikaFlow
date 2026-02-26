@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/app_provider.dart';
-import '../../models/operation_model.dart';
-import '../../theme/app_theme.dart';
 
 const _bg       = Color(0xFF1E2530);
 const _surface  = Color(0xFF252D3A);

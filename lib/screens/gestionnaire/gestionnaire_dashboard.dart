@@ -5,7 +5,6 @@ import '../../providers/app_provider.dart';
 import '../../models/operation_model.dart';
 import '../../models/stand_model.dart';
 import '../../models/entreprise_model.dart';
-import '../../theme/app_theme.dart';
 import '../auth/login_screen.dart';
 import 'stands_screen.dart';
 import 'membres_screen.dart';
@@ -1078,7 +1077,7 @@ class _GestionnaireDashboardState extends State<GestionnaireDashboard>
                     color: _textPrim,
                     fontWeight: FontWeight.w600, fontSize: 13),
               ),
-              Text(op.standNom ?? '',
+              Text(op.standNom,
                   style: const TextStyle(color: _textSec, fontSize: 11)),
             ],
           ),

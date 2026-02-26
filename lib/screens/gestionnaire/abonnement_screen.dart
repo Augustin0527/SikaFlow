@@ -178,10 +178,11 @@ class _AbonnementScreenState extends State<AbonnementScreen> {
                       style: const TextStyle(color: Colors.white70, fontSize: 12)),
                 ]),
                 const SizedBox(height: 6),
+                // ignore: unnecessary_null_comparison
                 Text(
-                  enEssai
+                  enEssai || abo == null
                       ? 'Essai gratuit'
-                      : '${abo!.plan.label} – ${abo.periode.label}',
+                      : '${abo.plan.label} – ${abo.periode.label}',
                   style: const TextStyle(color: Colors.white,
                       fontSize: 18, fontWeight: FontWeight.bold),
                 ),
