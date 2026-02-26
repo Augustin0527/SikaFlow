@@ -14,6 +14,7 @@ import 'operations_screen.dart';
 import 'alertes_screen.dart';
 import 'ristournes_screen.dart';
 import 'config_screen.dart';
+import 'abonnement_screen.dart';
 
 // ─── Constantes de couleur dark-mode ────────────────────────────────────────
 const _bg        = Color(0xFF1E2530);
@@ -55,6 +56,7 @@ class _GestionnaireDashboardState extends State<GestionnaireDashboard>
     _NavItem(Icons.percent_rounded, Icons.percent_outlined, 'Ristournes'),
     _NavItem(Icons.notifications_active_rounded, Icons.notifications_outlined, 'Alertes'),
     _NavItem(Icons.settings_rounded, Icons.settings_outlined, 'Configuration'),
+    _NavItem(Icons.workspace_premium_rounded, Icons.workspace_premium_outlined, 'Abonnement'),
   ];
 
   @override
@@ -103,6 +105,7 @@ class _GestionnaireDashboardState extends State<GestionnaireDashboard>
       case 5: return const RistournesScreen();
       case 6: return const AlertesScreen();
       case 7: return const ConfigScreen();
+      case 8: return const AbonnementScreen();
       default: return _buildDashboardPage(p);
     }
   }
@@ -128,6 +131,9 @@ class _GestionnaireDashboardState extends State<GestionnaireDashboard>
                 // Bannière email non vérifié
                 if (!p.emailVerifie)
                   _BanniereEmailNonVerifie(provider: p),
+                // Bannière abonnement expirant/expiré
+                if (ent != null)
+                  _BanniereAbonnement(ent: ent, onTap: () => _selectPage(8)),
                 // Body
                 Expanded(
                   child: _buildPage(p),
@@ -1494,6 +1500,67 @@ class _BanniereEmailNonVerifieState extends State<_BanniereEmailNonVerifie> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Bannière "Abonnement expirant / expiré" ─────────────────────────────────
+class _BanniereAbonnement extends StatelessWidget {
+  final EntrepriseModel ent;
+  final VoidCallback onTap;
+  const _BanniereAbonnement({required this.ent, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final expiration = ent.dateExpirationAbonnement;
+    final statut     = ent.statut;
+
+    // Ne rien afficher si actif avec plus de 7 jours restants
+    if (expiration != null && expiration.isAfter(now.add(const Duration(days: 7)))) {
+      return const SizedBox.shrink();
+    }
+    // Ne rien afficher si en essai avec plus de 3 jours
+    if (statut == 'essai') {
+      final finEssai = ent.dateFinEssai;
+      if (finEssai == null || finEssai.isAfter(now.add(const Duration(days: 3)))) {
+        return const SizedBox.shrink();
+      }
+    }
+
+    final bool expire = expiration != null && expiration.isBefore(now);
+    final int jours   = expiration != null
+        ? expiration.difference(now).inDays.clamp(0, 9999)
+        : 0;
+
+    final Color couleur = expire ? const Color(0xFFFF4444) : const Color(0xFFFFB300);
+    final String message = expire
+        ? 'Abonnement expiré — Renouvelez pour continuer'
+        : 'Abonnement expire dans $jours jour${jours > 1 ? "s" : ""} — Renouvelez maintenant';
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: couleur.withValues(alpha: 0.1),
+          border: Border(bottom: BorderSide(color: couleur.withValues(alpha: 0.4))),
+        ),
+        child: Row(children: [
+          Icon(
+            expire ? Icons.warning_rounded : Icons.access_time_rounded,
+            color: couleur, size: 17,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(message,
+                style: TextStyle(color: couleur, fontSize: 12,
+                    fontWeight: FontWeight.w600)),
+          ),
+          Icon(Icons.arrow_forward_ios_rounded, color: couleur, size: 12),
+        ]),
       ),
     );
   }

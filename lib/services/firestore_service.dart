@@ -264,12 +264,13 @@ class FirestoreService {
 
   Future<void> activerAbonnement({
     required String entrepriseId,
-    required String type, // 'semestriel'
+    required String type, // 'semestriel' | 'mensuel' | 'annuel'
     required int dureeMois,
     required double montant,
-    required String modePaiement, // 'fedapay' | 'manuel'
+    required String modePaiement, // 'fedapay' | 'manuel' | 'mtn' | 'moov' | 'carte'
     String? transactionId,
     String? adminId,
+    String? planCode,
   }) async {
     final now = DateTime.now();
     // Récupérer la date d'expiration actuelle
@@ -295,6 +296,7 @@ class FirestoreService {
       'mode_paiement': modePaiement,
       'transaction_id': transactionId,
       'admin_id': adminId,
+      'plan': planCode,
       'date_debut': Timestamp.fromDate(now),
       'date_fin': Timestamp.fromDate(nouvellExpiration),
       'created_at': FieldValue.serverTimestamp(),

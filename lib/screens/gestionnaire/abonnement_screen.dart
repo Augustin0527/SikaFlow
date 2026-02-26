@@ -181,7 +181,7 @@ class _AbonnementScreenState extends State<AbonnementScreen> {
                 Text(
                   enEssai
                       ? 'Essai gratuit'
-                      : '${abo?.plan.label ?? ''} – ${abo?.periode.label ?? ''}',
+                      : '${abo!.plan.label} – ${abo.periode.label}',
                   style: const TextStyle(color: Colors.white,
                       fontSize: 18, fontWeight: FontWeight.bold),
                 ),
