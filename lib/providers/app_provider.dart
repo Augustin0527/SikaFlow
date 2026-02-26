@@ -170,6 +170,20 @@ class AppProvider extends ChangeNotifier {
     _viderEtat();
   }
 
+  // ── Réinitialisation mot de passe ─────────────────────────────────────────
+  Future<Map<String, dynamic>> reinitialiserMotDePasse({
+    required String email,
+  }) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email.trim());
+      return {'success': true};
+    } on FirebaseAuthException catch (e) {
+      return {'success': false, 'erreur': _traduireErreur(e.code)};
+    } catch (e) {
+      return {'success': false, 'erreur': 'Erreur inattendue: $e'};
+    }
+  }
+
   // ── Inscription gestionnaire ──────────────────────────────────────────────
   Future<Map<String, dynamic>> inscrireGestionnaire({
     required String email,

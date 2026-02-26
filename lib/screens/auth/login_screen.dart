@@ -8,6 +8,7 @@ import '../controleur/controleur_dashboard.dart';
 import '../admin/admin_dashboard.dart';
 import '../auth/changer_mdp_screen.dart';
 import 'inscription_screen.dart';
+import 'mot_de_passe_oublie_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   final String? emailPrerempli;
@@ -301,7 +302,38 @@ class _LoginScreenState extends State<LoginScreen>
               validator: (v) =>
                   v == null || v.isEmpty ? 'Mot de passe requis' : null,
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 8),
+
+            // Lien mot de passe oublié
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => MotDePasseOublieScreen(
+                      emailInitial: _emailCtrl.text.trim().isNotEmpty
+                          ? _emailCtrl.text.trim()
+                          : null,
+                    ),
+                  ),
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 4, vertical: 2),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text(
+                  'Mot de passe oublié ?',
+                  style: TextStyle(
+                      color: AppTheme.accentOrange,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
 
             // Bouton SE CONNECTER
             SizedBox(
