@@ -148,10 +148,31 @@ class AppProvider extends ChangeNotifier {
         email: email.trim(),
         password: motDePasse,
       );
-      if (credential.user != null) {
-        await _chargerProfilFirebase(credential.user!.uid);
+      final firebaseUser = credential.user;
+      if (firebaseUser == null) {
+        _erreur = 'Connexion échouée';
+        _setChargement(false);
+        notifyListeners();
+        return false;
       }
+
+      // Vérifier si l'email est confirmé
+      await firebaseUser.reload();
+      final userActuel = _auth.currentUser;
+      if (userActuel == null || !userActuel.emailVerified) {
+        _erreur = 'email_non_verifie';
+        await _auth.signOut();
+        _setChargement(false);
+        notifyListeners();
+        return false;
+      }
+
+      // Email vérifié — activer le compte si encore en_attente
+      await _activerCompteApresVerification(firebaseUser.uid);
+
+      await _chargerProfilFirebase(firebaseUser.uid);
       return _utilisateurConnecte != null;
+
     } on FirebaseAuthException catch (e) {
       _erreur = _traduireErreur(e.code);
       _setChargement(false);
@@ -162,6 +183,33 @@ class AppProvider extends ChangeNotifier {
       _setChargement(false);
       notifyListeners();
       return false;
+    }
+  }
+
+  // Activer le compte après vérification email (statut en_attente → essai)
+  Future<void> _activerCompteApresVerification(String uid) async {
+    try {
+      final userDoc = await _db.collection('users').doc(uid).get();
+      if (!userDoc.exists) return;
+      final data = userDoc.data()!;
+
+      // Mettre à jour email_verifie dans users
+      if (data['email_verifie'] != true) {
+        await _db.collection('users').doc(uid).update({'email_verifie': true});
+      }
+
+      // Activer l'entreprise si encore en_attente
+      final entrepriseId = data['entreprise_id'] as String?;
+      if (entrepriseId != null) {
+        final entDoc = await _db.collection('entreprises').doc(entrepriseId).get();
+        if (entDoc.exists && entDoc.data()?['statut'] == 'en_attente') {
+          await _db.collection('entreprises').doc(entrepriseId).update({
+            'statut': 'essai',
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Erreur activation compte: $e');
     }
   }
 
@@ -184,6 +232,26 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  // ── Renvoyer email de vérification ────────────────────────────────────────
+  Future<Map<String, dynamic>> renvoyerEmailVerification({
+    required String email,
+    required String motDePasse,
+  }) async {
+    try {
+      // Se connecter temporairement pour pouvoir envoyer l'email
+      final cred = await _auth.signInWithEmailAndPassword(
+        email: email.trim(), password: motDePasse,
+      );
+      await cred.user?.sendEmailVerification();
+      await _auth.signOut();
+      return {'success': true};
+    } on FirebaseAuthException catch (e) {
+      return {'success': false, 'erreur': _traduireErreur(e.code)};
+    } catch (e) {
+      return {'success': false, 'erreur': 'Erreur: $e'};
+    }
+  }
+
   // ── Inscription gestionnaire ──────────────────────────────────────────────
   Future<Map<String, dynamic>> inscrireGestionnaire({
     required String email,
@@ -192,27 +260,37 @@ class AppProvider extends ChangeNotifier {
     required String nom,
     required String telephone,
     required String nomEntreprise,
+    String? description,
   }) async {
     try {
+      // Créer le compte Firebase Auth
       final credential = await _auth.createUserWithEmailAndPassword(
         email: email, password: motDePasse,
       );
-      final uid = credential.user!.uid;
-      final maintenant = DateTime.now();
-      final finEssai = maintenant.add(const Duration(days: 30));
+      final uid  = credential.user!.uid;
+      final now  = DateTime.now();
+      final finEssai         = now.add(const Duration(days: 30));
+      final limiteActivation = now.add(const Duration(hours: 72));
 
-      // Créer l'entreprise
+      // Envoyer l'email de vérification
+      try {
+        await credential.user!.sendEmailVerification();
+      } catch (_) {}
+
+      // Créer l'entreprise avec statut en_attente
       final entrepriseRef = _db.collection('entreprises').doc();
-      final entrepriseId = entrepriseRef.id;
+      final entrepriseId  = entrepriseRef.id;
       await entrepriseRef.set({
         'id': entrepriseId,
         'nom': nomEntreprise,
+        'description': description ?? '',
         'gestionnaire_id': uid,
-        'date_creation': Timestamp.fromDate(maintenant),
-        'statut': 'essai',
+        'date_creation': Timestamp.fromDate(now),
+        'statut': 'en_attente',          // actif après vérification email
         'plan': 'essai_gratuit',
         'date_fin_essai': Timestamp.fromDate(finEssai),
         'date_expiration_abonnement': Timestamp.fromDate(finEssai),
+        'date_limite_activation': Timestamp.fromDate(limiteActivation),
         'mode_saisie': 'detail',
         'delai_modification_heures': 30,
         'agents_voient_autres_stands': false,
@@ -235,9 +313,14 @@ class AppProvider extends ChangeNotifier {
         'stand_id': null,
         'mot_de_passe_provisoire': false,
         'actif': true,
+        'email_verifie': false,
         'permissions': [],
-        'date_creation': Timestamp.fromDate(maintenant),
+        'date_creation': Timestamp.fromDate(now),
+        'date_limite_activation': Timestamp.fromDate(limiteActivation),
       });
+
+      // Déconnecter immédiatement — l'accès sera donné après vérification email
+      await _auth.signOut();
 
       return {'success': true, 'entreprise_id': entrepriseId, 'user_id': uid};
     } on FirebaseAuthException catch (e) {
