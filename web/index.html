@@ -5,9 +5,6 @@
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="SikaFlow - Système de gestion des opérations Mobile Money au Bénin">
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -26,49 +23,18 @@
       margin: 0;
       background-color: #0A1628;
     }
-    #loading {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      font-family: sans-serif;
-      color: white;
-    }
-    .spinner {
-      width: 40px;
-      height: 40px;
-      border: 3px solid rgba(255,107,53,0.3);
-      border-top-color: #FF6B35;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      margin-bottom: 16px;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
-  <div id="loading">
-    <div class="spinner"></div>
-    <p style="color:#B0BEC5;font-size:14px">Chargement de SikaFlow...</p>
-  </div>
-
   <script>
-    // Désactiver et effacer tous les Service Workers en cache
+    // Désactiver les Service Workers obsolètes
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(function(registrations) {
-        for (let registration of registrations) {
-          registration.unregister();
-          console.log('Service Worker désenregistré:', registration.scope);
-        }
+        for (let r of registrations) r.unregister();
       });
-      // Effacer le cache du navigateur
       if ('caches' in window) {
         caches.keys().then(function(names) {
-          for (let name of names) {
-            caches.delete(name);
-            console.log('Cache effacé:', name);
-          }
+          for (let n of names) caches.delete(n);
         });
       }
     }
