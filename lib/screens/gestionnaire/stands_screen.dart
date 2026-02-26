@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/app_provider.dart';
@@ -364,17 +365,31 @@ class _CreerStandSheet extends StatefulWidget {
 }
 
 class _CreerStandSheetState extends State<_CreerStandSheet> {
-  final _nomCtrl = TextEditingController();
-  final _lieuCtrl = TextEditingController();
-  final Map<String, String> _numSims = {
-    'MTN': '', 'Moov': '', 'Celtiis': '',
+  final _nomCtrl      = TextEditingController();
+  final _lieuCtrl     = TextEditingController();
+  final _especeCtrl   = TextEditingController();
+
+  // Numéros SIM et capitaux initiaux par opérateur
+  final Map<String, TextEditingController> _numSimCtrl = {
+    'MTN': TextEditingController(),
+    'Moov': TextEditingController(),
+    'Celtiis': TextEditingController(),
   };
+  final Map<String, TextEditingController> _capitalSimCtrl = {
+    'MTN': TextEditingController(),
+    'Moov': TextEditingController(),
+    'Celtiis': TextEditingController(),
+  };
+
   bool _chargement = false;
 
   @override
   void dispose() {
     _nomCtrl.dispose();
     _lieuCtrl.dispose();
+    _especeCtrl.dispose();
+    for (final c in _numSimCtrl.values) c.dispose();
+    for (final c in _capitalSimCtrl.values) c.dispose();
     super.dispose();
   }
 
@@ -387,6 +402,7 @@ class _CreerStandSheetState extends State<_CreerStandSheet> {
       ),
       child: SingleChildScrollView(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Barre de drag
           Center(
             child: Container(
               width: 40, height: 4,
@@ -399,55 +415,127 @@ class _CreerStandSheetState extends State<_CreerStandSheet> {
           const Text('Créer un stand',
               style: TextStyle(color: Colors.white, fontSize: 18,
                   fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          const Text('Renseignez les informations et le capital initial.',
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
           const SizedBox(height: 20),
-          _buildField(_nomCtrl, 'Nom du stand', 'Ex: Stand Zogbo 1'),
-          const SizedBox(height: 12),
-          _buildField(_lieuCtrl, 'Lieu', 'Ex: Marché Zogbo, Cotonou'),
-          const SizedBox(height: 16),
-          const Text('Numéros SIM (optionnel)',
-              style: TextStyle(color: Colors.white, fontSize: 14,
-                  fontWeight: FontWeight.w600)),
+
+          // ── Infos générales ──
+          _buildSectionTitle('Informations du stand'),
           const SizedBox(height: 10),
-          ...Operateur.values.map((op) => Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Row(children: [
-              Container(
-                width: 60,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Color(op.couleurHex).withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(op.code, textAlign: TextAlign.center,
-                    style: TextStyle(
-                        color: Color(op.couleurHex),
-                        fontWeight: FontWeight.bold, fontSize: 12)),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  style: const TextStyle(color: Colors.white),
-                  keyboardType: TextInputType.phone,
-                  onChanged: (v) => _numSims[op.code] = v,
-                  decoration: InputDecoration(
-                    hintText: 'Numéro ${op.code}',
-                    hintStyle: const TextStyle(
-                        color: AppTheme.textSecondary, fontSize: 12),
-                    filled: true,
-                    fillColor: AppTheme.backgroundDark,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                  ),
-                ),
-              ),
-            ]),
-          )),
+          _buildField(_nomCtrl, 'Nom du stand', 'Ex: Stand Zogbo 1'),
+          const SizedBox(height: 10),
+          _buildField(_lieuCtrl, 'Lieu', 'Ex: Marché Zogbo, Cotonou'),
           const SizedBox(height: 20),
+
+          // ── Capital espèces ──
+          _buildSectionTitle('Capital espèces initial'),
+          const SizedBox(height: 10),
+          _buildCapitalField(_especeCtrl, 'Montant espèces',
+              Icons.payments_rounded, Colors.white),
+          const SizedBox(height: 20),
+
+          // ── SIM : numéro + capital ──
+          _buildSectionTitle('SIMs — Numéro & Capital initial'),
+          const SizedBox(height: 10),
+          ...Operateur.values.map((op) {
+            final couleur = Color(op.couleurHex);
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: couleur.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: couleur.withValues(alpha: 0.25)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: couleur.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(op.code,
+                          style: TextStyle(
+                              color: couleur,
+                              fontWeight: FontWeight.bold, fontSize: 12)),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(op.nom,
+                        style: const TextStyle(
+                            color: AppTheme.textSecondary, fontSize: 11)),
+                  ]),
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    // Numéro SIM
+                    Expanded(
+                      child: TextField(
+                        controller: _numSimCtrl[op.code],
+                        style: const TextStyle(color: Colors.white),
+                        keyboardType: TextInputType.phone,
+                        decoration: InputDecoration(
+                          labelText: 'Numéro SIM',
+                          labelStyle: const TextStyle(
+                              color: AppTheme.textSecondary, fontSize: 12),
+                          prefixIcon: Icon(Icons.sim_card_outlined,
+                              color: couleur, size: 18),
+                          filled: true,
+                          fillColor: AppTheme.backgroundDark,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 10),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    // Capital SIM
+                    Expanded(
+                      child: TextField(
+                        controller: _capitalSimCtrl[op.code],
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: false),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly
+                        ],
+                        decoration: InputDecoration(
+                          labelText: 'Capital (FCFA)',
+                          labelStyle: const TextStyle(
+                              color: AppTheme.textSecondary, fontSize: 12),
+                          prefixIcon: Icon(Icons.account_balance_wallet_outlined,
+                              color: couleur, size: 18),
+                          suffixText: 'FCFA',
+                          suffixStyle: const TextStyle(
+                              color: AppTheme.textHint, fontSize: 11),
+                          filled: true,
+                          fillColor: AppTheme.backgroundDark,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 10),
+                        ),
+                      ),
+                    ),
+                  ]),
+                ],
+              ),
+            );
+          }),
+
+          // ── Récap capital ──
+          _buildCapitalRecap(),
+          const SizedBox(height: 20),
+
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
@@ -467,10 +555,17 @@ class _CreerStandSheetState extends State<_CreerStandSheet> {
                           fontWeight: FontWeight.bold)),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
         ]),
       ),
     );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Text(title,
+        style: const TextStyle(
+            color: AppTheme.accentOrange,
+            fontWeight: FontWeight.bold, fontSize: 13));
   }
 
   Widget _buildField(TextEditingController ctrl, String label, String hint) {
@@ -491,6 +586,94 @@ class _CreerStandSheetState extends State<_CreerStandSheet> {
     );
   }
 
+  Widget _buildCapitalField(TextEditingController ctrl, String label,
+      IconData icon, Color couleur) {
+    return TextField(
+      controller: ctrl,
+      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+      keyboardType: const TextInputType.numberWithOptions(decimal: false),
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      onChanged: (_) => setState(() {}),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: AppTheme.textSecondary),
+        prefixIcon: Icon(icon, color: couleur, size: 20),
+        suffixText: 'FCFA',
+        suffixStyle: const TextStyle(color: AppTheme.textHint),
+        filled: true, fillColor: AppTheme.backgroundDark,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide.none,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCapitalRecap() {
+    final especes = double.tryParse(_especeCtrl.text) ?? 0;
+    double totalSim = 0;
+    for (final op in Operateur.values) {
+      totalSim += double.tryParse(_capitalSimCtrl[op.code]?.text ?? '') ?? 0;
+    }
+    final total = especes + totalSim;
+    if (total == 0) return const SizedBox.shrink();
+    final fmt = (double v) =>
+        v.toStringAsFixed(0).replaceAllMapped(
+            RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]} ');
+    return Container(
+      margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.accentOrange.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.accentOrange.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Récapitulatif capital',
+              style: TextStyle(
+                  color: AppTheme.accentOrange,
+                  fontWeight: FontWeight.bold, fontSize: 12)),
+          const SizedBox(height: 8),
+          _recapLigne('Espèces', especes, Colors.white),
+          ...Operateur.values.map((op) {
+            final v = double.tryParse(_capitalSimCtrl[op.code]?.text ?? '') ?? 0;
+            if (v == 0) return const SizedBox.shrink();
+            return _recapLigne(op.code, v, Color(op.couleurHex));
+          }),
+          const Divider(color: AppTheme.divider, height: 16),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            const Text('TOTAL',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold, fontSize: 13)),
+            Text('${fmt(total)} FCFA',
+                style: const TextStyle(
+                    color: AppTheme.accentOrange,
+                    fontWeight: FontWeight.bold, fontSize: 14)),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  Widget _recapLigne(String label, double v, Color couleur) {
+    final fmt = (double val) =>
+        val.toStringAsFixed(0).replaceAllMapped(
+            RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]} ');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text(label,
+            style: TextStyle(color: couleur, fontSize: 12)),
+        Text('${fmt(v)} FCFA',
+            style: TextStyle(color: couleur, fontSize: 12,
+                fontWeight: FontWeight.w600)),
+      ]),
+    );
+  }
+
   Future<void> _creer() async {
     if (_nomCtrl.text.trim().isEmpty || _lieuCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -500,16 +683,23 @@ class _CreerStandSheetState extends State<_CreerStandSheet> {
       return;
     }
     setState(() => _chargement = true);
+
+    // Construire les SIM avec capital initial
     final sims = Operateur.values.map((op) => SimCard(
       operateur: op.code,
-      numero: _numSims[op.code] ?? '',
-      solde: 0,
+      numero: _numSimCtrl[op.code]?.text.trim() ?? '',
+      solde: double.tryParse(_capitalSimCtrl[op.code]?.text ?? '') ?? 0,
     )).toList();
+
+    final capitalEspeces =
+        double.tryParse(_especeCtrl.text) ?? 0;
+
     final p = context.read<AppProvider>();
     final result = await p.creerStand(
       nom: _nomCtrl.text.trim(),
       lieu: _lieuCtrl.text.trim(),
       sims: sims,
+      capitalEspecesInitial: capitalEspeces,
     );
     if (!mounted) return;
     setState(() => _chargement = false);

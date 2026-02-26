@@ -357,6 +357,7 @@ class AppProvider extends ChangeNotifier {
     required String nom,
     required String lieu,
     required List<SimCard> sims,
+    double capitalEspecesInitial = 0,
     String? latitude,
     String? longitude,
   }) async {
@@ -368,12 +369,40 @@ class AppProvider extends ChangeNotifier {
         lieu: lieu,
         entrepriseId: _utilisateurConnecte!.entrepriseId!,
         sims: sims,
-        soldeEspeces: 0,
+        soldeEspeces: capitalEspecesInitial,
         dateCreation: DateTime.now(),
         latitude: latitude,
         longitude: longitude,
       );
       await ref.set(stand.toFirestore());
+
+      // Enregistrer le mouvement capital initial si non nul
+      if (capitalEspecesInitial > 0) {
+        await _db.collection('mouvements_capital').doc().set({
+          'stand_id': ref.id,
+          'entreprise_id': _utilisateurConnecte!.entrepriseId!,
+          'type': 'capital_initial_especes',
+          'montant': capitalEspecesInitial,
+          'motif': 'Capital initial espèces à la création du stand',
+          'date': Timestamp.fromDate(DateTime.now()),
+          'effectue_par': _utilisateurConnecte!.id,
+        });
+      }
+      for (final sim in sims) {
+        if (sim.solde > 0) {
+          await _db.collection('mouvements_capital').doc().set({
+            'stand_id': ref.id,
+            'entreprise_id': _utilisateurConnecte!.entrepriseId!,
+            'type': 'capital_initial_sim',
+            'operateur': sim.operateur,
+            'montant': sim.solde,
+            'motif': 'Capital initial SIM ${sim.operateur} à la création du stand',
+            'date': Timestamp.fromDate(DateTime.now()),
+            'effectue_par': _utilisateurConnecte!.id,
+          });
+        }
+      }
+
       _stands.add(stand);
       notifyListeners();
       return {'success': true, 'stand_id': ref.id};

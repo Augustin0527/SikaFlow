@@ -39,7 +39,6 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
 
   // Étape 3 — Entreprise
   final _nomEntrepriseCtrl = TextEditingController();
-  final _capitalCtrl       = TextEditingController();
   final _descCtrl          = TextEditingController();
   final _formKey2          = GlobalKey<FormState>();
 
@@ -48,7 +47,7 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
     _pageCtrl.dispose();
     _nomCtrl.dispose(); _prenomCtrl.dispose(); _telCtrl.dispose();
     _emailCtrl.dispose(); _passCtrl.dispose(); _passConfirmCtrl.dispose();
-    _nomEntrepriseCtrl.dispose(); _capitalCtrl.dispose(); _descCtrl.dispose();
+    _nomEntrepriseCtrl.dispose(); _descCtrl.dispose();
     super.dispose();
   }
 
@@ -678,23 +677,28 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
             _champ(_nomEntrepriseCtrl, 'Nom de l\'entreprise',
                 Icons.business_rounded, requis: true),
             const SizedBox(height: 12),
-            TextFormField(
-              controller: _capitalCtrl,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-              decoration: const InputDecoration(
-                labelText: 'Capital de départ (FCFA)',
-                prefixIcon: Icon(Icons.account_balance_wallet_rounded),
-                suffixText: 'FCFA',
-                suffixStyle: TextStyle(color: AppTheme.textHint),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.accentOrange.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: AppTheme.accentOrange.withValues(alpha: 0.3)),
               ),
-              validator: (v) {
-                if (v == null || v.isEmpty) return 'Entrez le capital';
-                final val = double.tryParse(v);
-                if (val == null || val <= 0) return 'Montant invalide';
-                return null;
-              },
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline_rounded,
+                      color: AppTheme.accentOrange, size: 18),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'Le capital sera défini stand par stand lors de leur création (espèces + SIMs).',
+                      style: TextStyle(
+                          color: AppTheme.accentOrange, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -778,9 +782,7 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
           if (_nomEntrepriseCtrl.text.isNotEmpty)
             _resumeLigne(Icons.business_rounded, 'Entreprise',
                 _nomEntrepriseCtrl.text),
-          if (_capitalCtrl.text.isNotEmpty)
-            _resumeLigne(Icons.account_balance_wallet_rounded,
-                'Capital', '${_capitalCtrl.text} FCFA'),
+
         ],
       ),
     );
