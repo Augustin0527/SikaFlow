@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="SikaFlow — Système de gestion des opérations Mobile Money au Bénin">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="SikaFlow">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
@@ -87,34 +87,21 @@
   </div>
 
   <script>
-    // ── Invalidation agressive du service worker et des caches ────────────────
+    // Désactiver tout service worker existant (évite le cache stale)
     (function() {
-      // 1. Dés-enregistrer tous les service workers existants
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(function(registrations) {
-          registrations.forEach(function(registration) {
-            registration.unregister();
-            console.log('[SikaFlow] SW désactivé:', registration.scope);
-          });
-        }).catch(function(e) {
-          console.warn('[SikaFlow] Erreur SW:', e);
+          registrations.forEach(function(r) { r.unregister(); });
         });
       }
-
-      // 2. Vider tous les caches du navigateur
       if ('caches' in window) {
-        caches.keys().then(function(cacheNames) {
-          cacheNames.forEach(function(cacheName) {
-            caches.delete(cacheName);
-            console.log('[SikaFlow] Cache supprimé:', cacheName);
-          });
-        }).catch(function(e) {
-          console.warn('[SikaFlow] Erreur cache:', e);
+        caches.keys().then(function(names) {
+          names.forEach(function(n) { caches.delete(n); });
         });
       }
     })();
   </script>
 
-  <script src="flutter_bootstrap.js?v=20260226b" async></script>
+  <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

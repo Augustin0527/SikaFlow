@@ -14,57 +14,23 @@ import 'screens/agent/agent_dashboard.dart';
 import 'screens/controleur/controleur_dashboard.dart';
 import 'screens/admin/admin_dashboard.dart';
 
-bool _firebaseInitialise = false;
-
-Future<void> _initFirebase() async {
-  if (_firebaseInitialise) return;
-  try {
-    // Sur le Web : Firebase.apps est vide avant la première init
-    if (Firebase.apps.isNotEmpty) {
-      _firebaseInitialise = true;
-      return;
-    }
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    _firebaseInitialise = true;
-    debugPrint('[SikaFlow] Firebase initialisé avec succès');
-  } catch (e) {
-    // Sur WASM: PlatformException(channel-error) = Firebase déjà init via JS SDK
-    // On tente de récupérer l'app existante
-    debugPrint('[SikaFlow] Firebase init error (tentative récupération): $e');
-    try {
-      // Si l'app existe déjà (via firebase_core_web), on la récupère
-      final apps = Firebase.apps;
-      if (apps.isNotEmpty) {
-        _firebaseInitialise = true;
-        debugPrint('[SikaFlow] Firebase app existante récupérée: ${apps.first.name}');
-      } else {
-        // Ré-essayer avec options explicites
-        await Firebase.initializeApp(
-          name: 'sikaflow',
-          options: DefaultFirebaseOptions.currentPlatform,
-        );
-        _firebaseInitialise = true;
-        debugPrint('[SikaFlow] Firebase initialisé (2ème tentative)');
-      }
-    } catch (e2) {
-      debugPrint('[SikaFlow] Firebase définitivement non disponible: $e2');
-      // On continue quand même – l'app fonctionne sans Firebase (mode dégradé)
-    }
-  }
-}
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Sur Web WASM, Firebase JS SDK est chargé de façon asynchrone.
-  // On attend un court instant pour s'assurer que les scripts JS sont prêts.
-  if (kIsWeb) {
-    await Future.delayed(const Duration(milliseconds: 300));
+  // Initialiser Firebase — simple et direct
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    if (kDebugMode) debugPrint('[SikaFlow] Firebase initialisé');
+  } on FirebaseException catch (e) {
+    // App déjà initialisée (hot-reload)
+    if (e.code != 'duplicate-app') {
+      if (kDebugMode) debugPrint('[SikaFlow] FirebaseException: ${e.code} - ${e.message}');
+    }
+  } catch (e) {
+    if (kDebugMode) debugPrint('[SikaFlow] Firebase erreur: $e');
   }
-
-  await _initFirebase();
 
   runApp(const SikaFlowApp());
 }
@@ -86,14 +52,9 @@ class SikaFlowApp extends StatelessWidget {
   }
 }
 
-class AppRouter extends StatefulWidget {
+class AppRouter extends StatelessWidget {
   const AppRouter({super.key});
 
-  @override
-  State<AppRouter> createState() => _AppRouterState();
-}
-
-class _AppRouterState extends State<AppRouter> {
   @override
   Widget build(BuildContext context) {
     return Consumer<AppProvider>(

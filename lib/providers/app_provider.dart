@@ -63,36 +63,31 @@ class AppProvider extends ChangeNotifier {
     _setChargement(true);
 
     try {
-      // Sur Web WASM, Firebase Auth peut prendre un peu de temps
-      // On utilise un Completer avec timeout de 5s
+      // Attendre le premier événement authStateChanges avec timeout 4s
       final completer = Completer<User?>();
 
       StreamSubscription<User?>? sub;
       sub = _auth.authStateChanges().listen((user) {
-        if (!completer.isCompleted) {
-          completer.complete(user);
-        }
+        if (!completer.isCompleted) completer.complete(user);
       }, onError: (e) {
         debugPrint('[AppProvider] authStateChanges error: $e');
         if (!completer.isCompleted) completer.complete(null);
       });
 
-      // Timeout 5 secondes (plus long pour WASM sur mobile)
       User? firebaseUser;
       try {
         firebaseUser = await completer.future
-            .timeout(const Duration(seconds: 5), onTimeout: () => null);
+            .timeout(const Duration(seconds: 4), onTimeout: () => null);
       } catch (_) {
         firebaseUser = null;
       }
-
       await sub.cancel();
 
       if (firebaseUser == null) {
-        _viderEtat();
+        _viderEtat(); // _chargement = false + notifyListeners() inclus
       } else {
         await _chargerProfilFirebase(firebaseUser.uid);
-        // Continuer à écouter les changements d'auth après init
+        // Écouter les changements d'auth après init
         _auth.authStateChanges().listen((User? u) async {
           if (u == null) {
             _viderEtat();
@@ -103,8 +98,8 @@ class AppProvider extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('[AppProvider] initialiser error: $e');
-      _chargement = false;
-      notifyListeners();
+      // Garantir que le chargement se termine même en cas d'erreur
+      _viderEtat();
     }
   }
 
