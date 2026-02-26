@@ -108,94 +108,9 @@ class _LoginScreenState extends State<LoginScreen>
         (route) => false,
       );
     } else {
-      // Cas spécial : email non vérifié
-      if (provider.erreur == 'email_non_verifie') {
-        _showDialogEmailNonVerifie();
-      } else {
-        _showErreur(provider.erreur ?? 'Email ou mot de passe incorrect');
-      }
+      // Plus de blocage pour email non vérifié : message simple
+      _showErreur(provider.erreur ?? 'Email ou mot de passe incorrect');
     }
-  }
-
-  void _showDialogEmailNonVerifie() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardDark,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Row(children: [
-          Icon(Icons.mark_email_unread_rounded,
-              color: AppTheme.warning, size: 24),
-          SizedBox(width: 10),
-          Text('Email non confirmé',
-              style: TextStyle(color: Colors.white, fontSize: 16,
-                  fontWeight: FontWeight.bold)),
-        ]),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Votre adresse email ${_emailCtrl.text.trim()} n\'a pas encore été confirmée.',
-              style: const TextStyle(
-                  color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Vérifiez votre boîte mail (y compris les spams) et cliquez sur le lien de confirmation.',
-              style: TextStyle(
-                  color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppTheme.warning.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Row(children: [
-                Icon(Icons.timer_outlined, color: AppTheme.warning, size: 16),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Sans activation sous 72h, le compte sera supprimé.',
-                    style: TextStyle(color: AppTheme.warning, fontSize: 11),
-                  ),
-                ),
-              ]),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              // Renvoyer l'email de vérification
-              final provider = context.read<AppProvider>();
-              final result = await provider.renvoyerEmailVerification(
-                email: _emailCtrl.text.trim(),
-                motDePasse: _passCtrl.text,
-              );
-              if (!mounted) return;
-              _showErreur(
-                result['success'] == true
-                    ? 'Email de confirmation renvoyé !'
-                    : result['erreur'] ?? 'Erreur',
-              );
-            },
-            child: const Text('Renvoyer l\'email',
-                style: TextStyle(color: AppTheme.textSecondary)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.accentOrange),
-            child: const Text('Compris',
-                style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
   }
 
   void _showErreur(String msg) {

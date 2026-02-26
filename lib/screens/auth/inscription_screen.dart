@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../providers/app_provider.dart';
 import '../../theme/app_theme.dart';
 import 'login_screen.dart';
+import '../gestionnaire/gestionnaire_dashboard.dart';
 
 class InscriptionScreen extends StatefulWidget {
   const InscriptionScreen({super.key});
@@ -16,7 +17,7 @@ class _InscriptionScreenState extends State<InscriptionScreen>
     with SingleTickerProviderStateMixin {
 
   final _pageCtrl = PageController();
-  int  _etape     = 0;   // 0 = formulaire, 1 = confirmation envoyée
+  int  _etape     = 0;   // 0 = formulaire (confirmation supprimée)
   bool _chargement = false;
 
   // ── Contrôleurs ──────────────────────────────────────────────────────────
@@ -81,11 +82,13 @@ class _InscriptionScreenState extends State<InscriptionScreen>
     setState(() => _chargement = false);
 
     if (result['success'] == true) {
-      // Passer à l'écran de confirmation
-      setState(() => _etape = 1);
-      _pageCtrl.animateToPage(1,
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeInOut);
+      // Rediriger directement vers le dashboard gestionnaire
+      // La bannière "email non vérifié" sera affichée dans le dashboard
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const GestionnaireDashboard()),
+        (route) => false,
+      );
     } else {
       _showSnack(result['erreur'] ?? 'Erreur lors de la création', isError: true);
     }
@@ -113,7 +116,6 @@ class _InscriptionScreenState extends State<InscriptionScreen>
             physics: const NeverScrollableScrollPhysics(),
             children: [
               _buildFormulaire(),
-              _buildConfirmation(),
             ],
           ),
         ),
@@ -281,124 +283,6 @@ class _InscriptionScreenState extends State<InscriptionScreen>
       ),
     );
   }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // ÉTAPE 2 — Confirmation email envoyé
-  // ══════════════════════════════════════════════════════════════════════════
-  Widget _buildConfirmation() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 28),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const SizedBox(height: 80),
-
-          // Icône email
-          Container(
-            width: 90,
-            height: 90,
-            decoration: BoxDecoration(
-              color: AppTheme.success.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.mark_email_unread_rounded,
-                color: AppTheme.success, size: 48),
-          ),
-          const SizedBox(height: 24),
-
-          const Text('Vérifiez votre email !',
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-
-          Text(
-            'Un lien de confirmation a été envoyé à\n${_emailCtrl.text.trim()}',
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-                color: AppTheme.textSecondary, fontSize: 14, height: 1.6),
-          ),
-          const SizedBox(height: 32),
-
-          // Étapes
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppTheme.cardDark,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppTheme.divider),
-            ),
-            child: Column(children: [
-              _etapeItem('1', 'Ouvrez votre boîte email',
-                  'Vérifiez aussi les spams', Icons.inbox_rounded),
-              const Divider(color: AppTheme.divider, height: 20),
-              _etapeItem('2', 'Cliquez sur le lien de confirmation',
-                  'Le lien est valable 72 heures', Icons.touch_app_rounded),
-              const Divider(color: AppTheme.divider, height: 20),
-              _etapeItem('3', 'Revenez vous connecter',
-                  'Votre espace sera activé automatiquement', Icons.login_rounded),
-            ]),
-          ),
-          const SizedBox(height: 20),
-
-          // Avertissement 72h
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppTheme.warning.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                  color: AppTheme.warning.withValues(alpha: 0.3)),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.timer_outlined,
-                    color: AppTheme.warning, size: 18),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Sans activation sous 72h, votre compte sera automatiquement supprimé.',
-                    style: TextStyle(
-                        color: AppTheme.warning,
-                        fontSize: 12, height: 1.4),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 28),
-
-          // Bouton connexion
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () => Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => LoginScreen(
-                        emailPrerempli: _emailCtrl.text.trim())),
-                (r) => false,
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.accentOrange,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
-              ),
-              icon: const Icon(Icons.login_rounded, color: Colors.white),
-              label: const Text('ALLER À LA CONNEXION',
-                  style: TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.bold,
-                      fontSize: 15)),
-            ),
-          ),
-          const SizedBox(height: 30),
-        ],
-      ),
-    );
-  }
-
   // ── Widgets utilitaires ──────────────────────────────────────────────────
 
   Widget _sectionLabel(String label, IconData icon) {
@@ -432,17 +316,14 @@ class _InscriptionScreenState extends State<InscriptionScreen>
     return TextFormField(
       controller: _telCtrl,
       keyboardType: TextInputType.phone,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
       style: const TextStyle(color: Colors.white),
       decoration: const InputDecoration(
         labelText: 'Téléphone',
-        prefixIcon: Icon(Icons.phone_android_rounded),
-        prefixText: '+229 01 ',
-        prefixStyle: TextStyle(color: AppTheme.textSecondary),
+        prefixIcon: Icon(Icons.phone_rounded),
       ),
       validator: (v) {
         if (v == null || v.trim().isEmpty) return 'Téléphone requis';
-        if (v.trim().length < 8) return 'Numéro invalide (min. 8 chiffres)';
+        if (v.trim().length < 8) return 'Numéro invalide';
         return null;
       },
     );
@@ -454,15 +335,12 @@ class _InscriptionScreenState extends State<InscriptionScreen>
       keyboardType: TextInputType.emailAddress,
       style: const TextStyle(color: Colors.white),
       decoration: const InputDecoration(
-        labelText: 'Email',
+        labelText: 'Adresse email',
         prefixIcon: Icon(Icons.email_outlined),
-        hintText: 'exemple@email.com',
       ),
       validator: (v) {
         if (v == null || v.trim().isEmpty) return 'Email requis';
-        final reg = RegExp(
-            r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$');
-        if (!reg.hasMatch(v.trim())) return 'Format email invalide';
+        if (!v.contains('@') || !v.contains('.')) return 'Email invalide';
         return null;
       },
     );
@@ -477,17 +355,15 @@ class _InscriptionScreenState extends State<InscriptionScreen>
         labelText: 'Mot de passe',
         prefixIcon: const Icon(Icons.lock_outline_rounded),
         suffixIcon: IconButton(
-          icon: Icon(
-              _passVisible ? Icons.visibility_off : Icons.visibility,
-              color: AppTheme.textSecondary),
+          icon: Icon(_passVisible
+              ? Icons.visibility_off_rounded
+              : Icons.visibility_rounded),
           onPressed: () => setState(() => _passVisible = !_passVisible),
         ),
       ),
       validator: (v) {
         if (v == null || v.isEmpty) return 'Mot de passe requis';
-        if (v.length < 8) return 'Minimum 8 caractères';
-        if (!RegExp(r'[A-Z]').hasMatch(v)) return '1 majuscule requise';
-        if (!RegExp(r'[0-9]').hasMatch(v)) return '1 chiffre requis';
+        if (v.length < 6) return 'Minimum 6 caractères';
         return null;
       },
     );
@@ -502,11 +378,11 @@ class _InscriptionScreenState extends State<InscriptionScreen>
         labelText: 'Confirmer le mot de passe',
         prefixIcon: const Icon(Icons.lock_outline_rounded),
         suffixIcon: IconButton(
-          icon: Icon(
-              _passConfirmVisible ? Icons.visibility_off : Icons.visibility,
-              color: AppTheme.textSecondary),
-          onPressed: () =>
-              setState(() => _passConfirmVisible = !_passConfirmVisible),
+          icon: Icon(_passConfirmVisible
+              ? Icons.visibility_off_rounded
+              : Icons.visibility_rounded),
+          onPressed: () => setState(
+              () => _passConfirmVisible = !_passConfirmVisible),
         ),
       ),
       validator: (v) {
@@ -527,43 +403,6 @@ class _InscriptionScreenState extends State<InscriptionScreen>
         prefixIcon: Icon(Icons.description_outlined),
         alignLabelWithHint: true,
       ),
-    );
-  }
-
-  Widget _etapeItem(String num, String titre, String sous, IconData icon) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 28, height: 28,
-          decoration: BoxDecoration(
-            color: AppTheme.accentOrange.withValues(alpha: 0.15),
-            shape: BoxShape.circle,
-          ),
-          alignment: Alignment.center,
-          child: Text(num,
-              style: const TextStyle(
-                  color: AppTheme.accentOrange,
-                  fontWeight: FontWeight.bold, fontSize: 13)),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(titre,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600, fontSize: 13)),
-              const SizedBox(height: 2),
-              Text(sous,
-                  style: const TextStyle(
-                      color: AppTheme.textSecondary, fontSize: 11)),
-            ],
-          ),
-        ),
-        Icon(icon, color: AppTheme.textHint, size: 18),
-      ],
     );
   }
 }

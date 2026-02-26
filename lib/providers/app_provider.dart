@@ -39,6 +39,8 @@ class AppProvider extends ChangeNotifier {
   bool             get chargement           => _chargement;
   bool             get estConnecte          => _utilisateurConnecte != null;
   String?          get erreur               => _erreur;
+  // Retourne true si l'email Firebase est v\u00e9rifi\u00e9
+  bool             get emailVerifie         => _auth.currentUser?.emailVerified ?? false;
 
   List<UserModel>            get membres          => List.unmodifiable(_membres);
   List<StandModel>           get stands           => List.unmodifiable(_stands);
@@ -156,19 +158,15 @@ class AppProvider extends ChangeNotifier {
         return false;
       }
 
-      // Vérifier si l'email est confirmé
+      // Recharger pour avoir le statut emailVerified à jour
       await firebaseUser.reload();
       final userActuel = _auth.currentUser;
-      if (userActuel == null || !userActuel.emailVerified) {
-        _erreur = 'email_non_verifie';
-        await _auth.signOut();
-        _setChargement(false);
-        notifyListeners();
-        return false;
-      }
 
-      // Email vérifié — activer le compte si encore en_attente
-      await _activerCompteApresVerification(firebaseUser.uid);
+      // Si l'email est vérifié → activer le compte si encore en_attente
+      if (userActuel != null && userActuel.emailVerified) {
+        await _activerCompteApresVerification(firebaseUser.uid);
+      }
+      // Sinon on laisse passer : la bannière dans le dashboard informera l'utilisateur
 
       await _chargerProfilFirebase(firebaseUser.uid);
       return _utilisateurConnecte != null;
@@ -252,6 +250,49 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  // ── Renvoyer email de vérification (utilisateur déjà connecté) ───────────
+  Future<Map<String, dynamic>> renvoyerEmailVerificationConnecte() async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return {'success': false, 'erreur': 'Utilisateur non connecté'};
+      await user.sendEmailVerification();
+      return {'success': true};
+    } on FirebaseAuthException catch (e) {
+      return {'success': false, 'erreur': _traduireErreur(e.code)};
+    } catch (e) {
+      return {'success': false, 'erreur': 'Erreur: $e'};
+    }
+  }
+
+  // ── Vérifier et activer si email vérifié (appelé depuis le dashboard) ─────
+  Future<bool> verifierActivationEmail() async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return false;
+      await user.reload();
+      final reloaded = _auth.currentUser;
+      if (reloaded != null && reloaded.emailVerified) {
+        await _activerCompteApresVerification(reloaded.uid);
+        // Mettre à jour le profil local
+        if (_utilisateurConnecte != null) {
+          final doc = await _db.collection('users').doc(reloaded.uid).get();
+          if (doc.exists) {
+            _utilisateurConnecte = UserModel.fromFirestore(doc.data()!, reloaded.uid);
+          }
+          if (_entrepriseActive != null) {
+            await _chargerEntreprise(_entrepriseActive!.id);
+          }
+        }
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('Erreur vérification activation: $e');
+      return false;
+    }
+  }
+
   // ── Inscription gestionnaire ──────────────────────────────────────────────
   Future<Map<String, dynamic>> inscrireGestionnaire({
     required String email,
@@ -319,8 +360,11 @@ class AppProvider extends ChangeNotifier {
         'date_limite_activation': Timestamp.fromDate(limiteActivation),
       });
 
-      // Déconnecter immédiatement — l'accès sera donné après vérification email
-      await _auth.signOut();
+      // Ne pas déconnecter : l'utilisateur accède directement au dashboard
+      // avec une bannière l'invitant à vérifier son email
+
+      // Charger son profil pour l'authentifier dans l'app
+      await _chargerProfilFirebase(uid);
 
       return {'success': true, 'entreprise_id': entrepriseId, 'user_id': uid};
     } on FirebaseAuthException catch (e) {

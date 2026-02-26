@@ -125,6 +125,9 @@ class _GestionnaireDashboardState extends State<GestionnaireDashboard>
               children: [
                 // AppBar custom
                 _buildAppBar(user.prenom, ent?.nom, notifCount, p),
+                // Bannière email non vérifié
+                if (!p.emailVerifie)
+                  _BanniereEmailNonVerifie(provider: p),
                 // Body
                 Expanded(
                   child: _buildPage(p),
@@ -1365,6 +1368,133 @@ class _IconBtn extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+// ─── Bannière "Email non vérifié" ────────────────────────────────────────────
+class _BanniereEmailNonVerifie extends StatefulWidget {
+  final AppProvider provider;
+  const _BanniereEmailNonVerifie({required this.provider});
+
+  @override
+  State<_BanniereEmailNonVerifie> createState() => _BanniereEmailNonVerifieState();
+}
+
+class _BanniereEmailNonVerifieState extends State<_BanniereEmailNonVerifie> {
+  bool _envoi = false;
+  bool _verification = false;
+
+  Future<void> _renvoyerEmail() async {
+    setState(() => _envoi = true);
+    final result = await widget.provider.renvoyerEmailVerificationConnecte();
+    if (!mounted) return;
+    setState(() => _envoi = false);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(result['success'] == true
+          ? 'Email de confirmation envoyé ! Vérifiez votre boîte mail.'
+          : result['erreur'] ?? 'Erreur lors de l\'envoi'),
+      backgroundColor: result['success'] == true
+          ? const Color(0xFF00C896)
+          : const Color(0xFFFF4444),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ));
+  }
+
+  Future<void> _verifierMaintenant() async {
+    setState(() => _verification = true);
+    final active = await widget.provider.verifierActivationEmail();
+    if (!mounted) return;
+    setState(() => _verification = false);
+    if (active) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('✅ Email confirmé ! Votre compte est maintenant actif.'),
+        backgroundColor: Color(0xFF00C896),
+        behavior: SnackBarBehavior.floating,
+      ));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Email pas encore confirmé. Vérifiez votre boîte mail.'),
+        backgroundColor: Color(0xFFFFB300),
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFB300).withValues(alpha: 0.12),
+        border: const Border(
+          bottom: BorderSide(color: Color(0xFFFFB300), width: 1),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.mark_email_unread_rounded,
+              color: Color(0xFFFFB300), size: 18),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Confirmez votre email pour activer votre compte (72h max)',
+              style: TextStyle(
+                  color: Color(0xFFFFB300), fontSize: 12, height: 1.3),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Bouton vérifier
+          GestureDetector(
+            onTap: _verification ? null : _verifierMaintenant,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00C896).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: const Color(0xFF00C896).withValues(alpha: 0.4)),
+              ),
+              child: _verification
+                  ? const SizedBox(
+                      width: 12, height: 12,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 1.5, color: Color(0xFF00C896)))
+                  : const Text('Vérifier',
+                      style: TextStyle(
+                          color: Color(0xFF00C896),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600)),
+            ),
+          ),
+          const SizedBox(width: 6),
+          // Bouton renvoyer
+          GestureDetector(
+            onTap: _envoi ? null : _renvoyerEmail,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFB300).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: const Color(0xFFFFB300).withValues(alpha: 0.4)),
+              ),
+              child: _envoi
+                  ? const SizedBox(
+                      width: 12, height: 12,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 1.5, color: Color(0xFFFFB300)))
+                  : const Text('Renvoyer',
+                      style: TextStyle(
+                          color: Color(0xFFFFB300),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
