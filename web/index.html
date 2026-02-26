@@ -1,55 +1,120 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
   <base href="/">
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="SikaFlow - Système de gestion des opérations Mobile Money au Bénin">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="SikaFlow — Système de gestion des opérations Mobile Money au Bénin">
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="SikaFlow">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
-  <link rel="icon" type="image/png" href="favicon.png"/>
-  <title>SikaFlow — Système de gestion des opérations Mobile Money</title>
+  <link rel="icon" type="image/png" href="icons/Icon-192.png"/>
+  <title>SikaFlow — Gestion Mobile Money</title>
   <link rel="manifest" href="manifest.json">
   <style>
-    body { margin: 0; background-color: #0A1628; }
-    #loading-indicator {
-      position: fixed; top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      text-align: center; color: #FF6B35;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; }
+    body {
+      background-color: #0A1628;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
-    #loading-indicator .spinner {
-      width: 40px; height: 40px; margin: 0 auto 16px;
-      border: 3px solid rgba(255,107,53,0.3);
+    #loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      opacity: 0;
+      animation: fadeIn 0.6s ease forwards 0.1s;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .logo-wrap {
+      width: 88px; height: 88px;
+      background: #FFFFFF;
+      border-radius: 22px;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(255,107,53,0.35);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%,100% { box-shadow: 0 8px 32px rgba(255,107,53,0.30); }
+      50%      { box-shadow: 0 8px 48px rgba(255,107,53,0.55); }
+    }
+    .logo-wrap img {
+      width: 88px; height: 88px;
+      object-fit: cover;
+      border-radius: 22px;
+    }
+    .app-name {
+      color: #FFFFFF;
+      font-size: 28px;
+      font-weight: 900;
+      letter-spacing: 1px;
+    }
+    .sub {
+      color: #8A9BB0;
+      font-size: 13px;
+      letter-spacing: 0.5px;
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid rgba(255,107,53,0.2);
       border-top-color: #FF6B35;
       border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+      animation: spin 0.75s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
-  <div id="loading-indicator">
+  <div id="loading">
+    <div class="logo-wrap">
+      <img src="icons/Icon-192.png" alt="SikaFlow"
+           onerror="this.style.display='none'; this.parentElement.innerHTML='<span style=font-size:44px>💰</span>'">
+    </div>
+    <div class="app-name">SikaFlow</div>
+    <div class="sub">Gestion Mobile Money</div>
     <div class="spinner"></div>
-    <div>Chargement SikaFlow...</div>
   </div>
 
   <script>
-    // Désactiver service workers et caches
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(regs) {
-        regs.forEach(function(r) { r.unregister(); });
-      });
-    }
-    if ('caches' in window) {
-      caches.keys().then(function(names) {
-        names.forEach(function(n) { caches.delete(n); });
-      });
-    }
+    // ── Invalidation agressive du service worker et des caches ────────────────
+    (function() {
+      // 1. Dés-enregistrer tous les service workers existants
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          registrations.forEach(function(registration) {
+            registration.unregister();
+            console.log('[SikaFlow] SW désactivé:', registration.scope);
+          });
+        }).catch(function(e) {
+          console.warn('[SikaFlow] Erreur SW:', e);
+        });
+      }
+
+      // 2. Vider tous les caches du navigateur
+      if ('caches' in window) {
+        caches.keys().then(function(cacheNames) {
+          cacheNames.forEach(function(cacheName) {
+            caches.delete(cacheName);
+            console.log('[SikaFlow] Cache supprimé:', cacheName);
+          });
+        }).catch(function(e) {
+          console.warn('[SikaFlow] Erreur cache:', e);
+        });
+      }
+    })();
   </script>
 
-  <script src="flutter_bootstrap.js" async></script>
+  <script src="flutter_bootstrap.js?v=20260226b" async></script>
 </body>
 </html>

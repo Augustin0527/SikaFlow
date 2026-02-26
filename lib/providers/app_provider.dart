@@ -63,18 +63,28 @@ class AppProvider extends ChangeNotifier {
     _setChargement(true);
 
     try {
-      // Attendre le premier événement Firebase Auth (max 4 secondes)
+      // Sur Web WASM, Firebase Auth peut prendre un peu de temps
+      // On utilise un Completer avec timeout de 5s
       final completer = Completer<User?>();
 
-      final sub = _auth.authStateChanges().listen((user) {
-        if (!completer.isCompleted) completer.complete(user);
+      StreamSubscription<User?>? sub;
+      sub = _auth.authStateChanges().listen((user) {
+        if (!completer.isCompleted) {
+          completer.complete(user);
+        }
       }, onError: (e) {
+        debugPrint('[AppProvider] authStateChanges error: $e');
         if (!completer.isCompleted) completer.complete(null);
       });
 
-      // Timeout 4 secondes
-      final firebaseUser = await completer.future
-          .timeout(const Duration(seconds: 4), onTimeout: () => null);
+      // Timeout 5 secondes (plus long pour WASM sur mobile)
+      User? firebaseUser;
+      try {
+        firebaseUser = await completer.future
+            .timeout(const Duration(seconds: 5), onTimeout: () => null);
+      } catch (_) {
+        firebaseUser = null;
+      }
 
       await sub.cancel();
 
@@ -82,7 +92,7 @@ class AppProvider extends ChangeNotifier {
         _viderEtat();
       } else {
         await _chargerProfilFirebase(firebaseUser.uid);
-        // Continuer à écouter les changements d'auth
+        // Continuer à écouter les changements d'auth après init
         _auth.authStateChanges().listen((User? u) async {
           if (u == null) {
             _viderEtat();
@@ -92,7 +102,7 @@ class AppProvider extends ChangeNotifier {
         });
       }
     } catch (e) {
-      debugPrint('initialiser error: $e');
+      debugPrint('[AppProvider] initialiser error: $e');
       _chargement = false;
       notifyListeners();
     }
