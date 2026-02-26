@@ -1,16 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
 import '../../providers/app_provider.dart';
+import '../../models/operation_model.dart';
+import '../../models/stand_model.dart';
+import '../../models/entreprise_model.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/operateur_card.dart';
-import 'retraits_screen.dart';
+import '../auth/login_screen.dart';
+import 'stands_screen.dart';
 import 'membres_screen.dart';
-import '../controleur/ristournes_screen.dart';
 import 'rapports_screen.dart';
-import '../auth/changer_mdp_screen.dart';
-import 'abonnement_screen.dart';
-import '../../models/abonnement_model.dart';
+import 'operations_screen.dart';
+import 'alertes_screen.dart';
+import 'ristournes_screen.dart';
+import 'config_screen.dart';
+
+// ─── Constantes de couleur dark-mode ────────────────────────────────────────
+const _bg        = Color(0xFF1E2530);
+const _surface   = Color(0xFF252D3A);
+const _surfaceHi = Color(0xFF2C3547);
+const _border    = Color(0xFF313D52);
+const _orange    = Color(0xFFFF6B35);
+const _orangeGlow= Color(0xFFFF9500);
+const _success   = Color(0xFF00C896);
+const _warning   = Color(0xFFFFB300);
+const _error     = Color(0xFFFF4444);
+const _textPrim  = Color(0xFFF0F4F8);
+const _textSec   = Color(0xFF8A9BB0);
+const _sidebar   = Color(0xFF1A2130);
 
 class GestionnaireDashboard extends StatefulWidget {
   const GestionnaireDashboard({super.key});
@@ -19,154 +36,178 @@ class GestionnaireDashboard extends StatefulWidget {
   State<GestionnaireDashboard> createState() => _GestionnaireDashboardState();
 }
 
-class _GestionnaireDashboardState extends State<GestionnaireDashboard> {
-  int _selectedPeriode = 0; // 0=semaine, 1=mois, 2=année
-  int _navIndex = 0;
-  final List<String> _periodes = ['semaine', 'mois', 'annee'];
-  final List<String> _periodesLabels = ['Semaine', 'Mois', 'Année'];
+class _GestionnaireDashboardState extends State<GestionnaireDashboard>
+    with SingleTickerProviderStateMixin {
+  int _pageIndex = 0;
+  bool _sidebarOpen = false;
+  late AnimationController _sidebarAnim;
+  late Animation<double> _slideAnim;
+  final _fmt = NumberFormat('#,###', 'fr_FR');
+
+  String _fmtF(double v) => '${_fmt.format(v)} FCFA';
+
+  final List<_NavItem> _navItems = const [
+    _NavItem(Icons.dashboard_rounded, Icons.dashboard_outlined, 'Tableau de bord'),
+    _NavItem(Icons.store_rounded, Icons.store_outlined, 'Stands'),
+    _NavItem(Icons.receipt_long_rounded, Icons.receipt_long_outlined, 'Opérations'),
+    _NavItem(Icons.people_alt_rounded, Icons.people_alt_outlined, 'Membres'),
+    _NavItem(Icons.bar_chart_rounded, Icons.bar_chart_outlined, 'Rapports'),
+    _NavItem(Icons.percent_rounded, Icons.percent_outlined, 'Ristournes'),
+    _NavItem(Icons.notifications_active_rounded, Icons.notifications_outlined, 'Alertes'),
+    _NavItem(Icons.settings_rounded, Icons.settings_outlined, 'Configuration'),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _sidebarAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    );
+    _slideAnim = CurvedAnimation(parent: _sidebarAnim, curve: Curves.easeInOut);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AppProvider>().rafraichir();
+    });
+  }
+
+  @override
+  void dispose() {
+    _sidebarAnim.dispose();
+    super.dispose();
+  }
+
+  void _toggleSidebar() {
+    setState(() => _sidebarOpen = !_sidebarOpen);
+    if (_sidebarOpen) {
+      _sidebarAnim.forward();
+    } else {
+      _sidebarAnim.reverse();
+    }
+  }
+
+  void _selectPage(int index) {
+    setState(() {
+      _pageIndex = index;
+      _sidebarOpen = false;
+    });
+    _sidebarAnim.reverse();
+  }
+
+  Widget _buildPage(AppProvider p) {
+    switch (_pageIndex) {
+      case 0: return _buildDashboardPage(p);
+      case 1: return const StandsScreen();
+      case 2: return const OperationsScreen();
+      case 3: return const MembresScreen();
+      case 4: return const RapportsScreen();
+      case 5: return const RistournesScreen();
+      case 6: return const AlertesScreen();
+      case 7: return const ConfigScreen();
+      default: return _buildDashboardPage(p);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
-      body: IndexedStack(
-        index: _navIndex,
-        children: [
-          _buildDashboard(),
-          const MembresScreen(),
-          const RistournesScreen(),
-          const RetraitsScreen(),
-          const RapportsGestScreen(),
-        ],
-      ),
-      bottomNavigationBar: _buildBottomNav(),
-    );
-  }
+    return Consumer<AppProvider>(builder: (ctx, p, _) {
+      final user    = p.utilisateurConnecte!;
+      final ent     = p.entrepriseActive;
+      final alertes = p.alertesNonLues;
+      final demandes = p.demandesEnAttente;
+      final notifCount = alertes.length + demandes.length;
 
-  Widget _buildBottomNav() {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.primaryDark,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: BottomNavigationBar(
-          currentIndex: _navIndex,
-          onTap: (i) => setState(() => _navIndex = i),
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.dashboard_rounded), label: 'Tableau'),
-            BottomNavigationBarItem(icon: Icon(Icons.group_rounded), label: 'Membres'),
-            BottomNavigationBarItem(icon: Icon(Icons.star_rounded), label: 'Ristournes'),
-            BottomNavigationBarItem(icon: Icon(Icons.payments_rounded), label: 'Retraits'),
-            BottomNavigationBarItem(icon: Icon(Icons.bar_chart_rounded), label: 'Rapports'),
-          ],
-        ),
-      ),
-    );
-  }
+      return Scaffold(
+        backgroundColor: _bg,
+        body: Stack(
+          children: [
+            // ── Contenu principal ──────────────────────────────────────────
+            Column(
+              children: [
+                // AppBar custom
+                _buildAppBar(user.prenom, ent?.nom, notifCount, p),
+                // Body
+                Expanded(
+                  child: _buildPage(p),
+                ),
+              ],
+            ),
 
-  Widget _buildDashboard() {
-    return Consumer<AppProvider>(
-      builder: (ctx, provider, _) {
-        final synth = provider.syntheseAujourdhui;
-        final user = provider.utilisateurConnecte!;
-        final donnees = provider.getDonneesEvolution(_periodes[_selectedPeriode]);
+            // ── Overlay sidebar ────────────────────────────────────────────
+            if (_sidebarOpen)
+              GestureDetector(
+                onTap: _toggleSidebar,
+                child: Container(color: Colors.black.withValues(alpha: 0.5)),
+              ),
 
-        return CustomScrollView(
-          slivers: [
-            _buildAppBar(user, provider),
-            SliverPadding(
-              padding: const EdgeInsets.all(16),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  // ── Bannière alerte abonnement ──
-                  _buildBanniereAbonnement(provider),
-                  // Carte synthèse principale
-                  _buildSyntheseCard(synth, provider),
-                  const SizedBox(height: 16),
-                  // Cartes opérateurs
-                  _buildOperateursSection(synth, provider),
-                  const SizedBox(height: 16),
-                  // Graphique évolution
-                  _buildEvolutionSection(donnees, provider),
-                  const SizedBox(height: 16),
-                  // Ristournes disponibles
-                  _buildRistournesSection(provider),
-                  const SizedBox(height: 16),
-                  // Accès rapide retraits
-                  _buildActionsRapides(),
-                  const SizedBox(height: 24),
-                ]),
+            // ── Sidebar ────────────────────────────────────────────────────
+            AnimatedBuilder(
+              animation: _slideAnim,
+              builder: (_, __) => Transform.translate(
+                offset: Offset(-280 * (1 - _slideAnim.value), 0),
+                child: _buildSidebar(user.prenom, user.nom, ent?.nom, p),
               ),
             ),
           ],
-        );
-      },
-    );
+        ),
+      );
+    });
   }
 
-  Widget _buildAppBar(user, AppProvider provider) {
-    return SliverAppBar(
-      expandedHeight: 120,
-      floating: false,
-      pinned: true,
-      backgroundColor: AppTheme.primaryDark,
-      flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: const BoxDecoration(gradient: AppTheme.primaryGradient),
-          padding: const EdgeInsets.fromLTRB(16, 50, 16, 0),
+  // ── AppBar ─────────────────────────────────────────────────────────────────
+  Widget _buildAppBar(
+      String prenom, String? entNom, int notifCount, AppProvider p) {
+    return Container(
+      decoration: BoxDecoration(
+        color: _sidebar,
+        border: const Border(bottom: BorderSide(color: _border, width: 1)),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  gradient: AppTheme.accentGradient,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(Icons.manage_accounts_rounded, color: Colors.white, size: 24),
+              // Burger
+              _IconBtn(
+                icon: Icons.menu_rounded,
+                onTap: _toggleSidebar,
+                badge: notifCount > 0 ? notifCount : null,
               ),
               const SizedBox(width: 12),
+              // Logo + titre
+              Container(
+                width: 34, height: 34,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [_orange, _orangeGlow],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.bolt_rounded, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      'Bonjour, ${user.prenom} !',
-                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      entNom ?? 'SikaFlow',
+                      style: const TextStyle(
+                        color: _textPrim, fontSize: 14, fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    Text(
-                      provider.entrepriseActive?.nom ?? 'Gestionnaire',
-                      style: const TextStyle(color: AppTheme.accentOrange, fontSize: 12),
-                    ),
+                    Text('Bonjour, $prenom',
+                        style: const TextStyle(color: _textSec, fontSize: 11)),
                   ],
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.logout_rounded, color: AppTheme.textSecondary),
-                onPressed: () => _confirmerDeconnexion(provider),
-              ),
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert_rounded, color: AppTheme.textSecondary),
-                color: AppTheme.cardDarker,
-                onSelected: (v) {
-                  if (v == 'mdp') {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const ChangerMotDePasseScreen()));
-                  } else if (v == 'abonnement') {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const AbonnementScreen()));
-                  }
-                },
-                itemBuilder: (_) => [
-                  const PopupMenuItem(value: 'mdp', child: Row(children: [Icon(Icons.lock_reset_rounded, color: AppTheme.accentOrange, size: 18), SizedBox(width: 8), Text('Changer mot de passe', style: TextStyle(color: Colors.white, fontSize: 13))])),
-                  const PopupMenuItem(value: 'abonnement', child: Row(children: [Icon(Icons.subscriptions_rounded, color: AppTheme.accentOrange, size: 18), SizedBox(width: 8), Text('Abonnement', style: TextStyle(color: Colors.white, fontSize: 13))])),
-                ],
+              // Notifications
+              _IconBtn(
+                icon: Icons.notifications_outlined,
+                onTap: () => _voirNotifications(p),
+                badge: notifCount > 0 ? notifCount : null,
               ),
             ],
           ),
@@ -175,409 +216,1155 @@ class _GestionnaireDashboardState extends State<GestionnaireDashboard> {
     );
   }
 
-  // ── Bannière alerte abonnement ─────────────────────────────────────────
-  Widget _buildBanniereAbonnement(AppProvider provider) {
-    final abonnement = provider.abonnementActif;
-    if (abonnement == null) return const SizedBox.shrink();
-
-    final joursRestants = abonnement.joursRestants;
-    final estEssai = abonnement.plan == PlanAbonnement.essai;
-
-    // Afficher seulement si < 7 jours restants ou expiré
-    if (joursRestants > 7 && abonnement.estActif) return const SizedBox.shrink();
-
-    final bool estExpire = !abonnement.estActif || joursRestants < 0;
-    final couleur = estExpire ? AppTheme.error : AppTheme.warning;
-    final icone = estExpire ? Icons.error_rounded : Icons.warning_amber_rounded;
-
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const AbonnementScreen()),
+  // ── Sidebar ────────────────────────────────────────────────────────────────
+  Widget _buildSidebar(
+      String prenom, String nom, String? entNom, AppProvider p) {
+    return Container(
+      width: 280,
+      height: double.infinity,
+      decoration: const BoxDecoration(
+        color: _sidebar,
+        border: Border(right: BorderSide(color: _border)),
       ),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: couleur.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: couleur.withValues(alpha: 0.4)),
+      child: Column(
+        children: [
+          // En-tête profil
+          SafeArea(
+            bottom: false,
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 48, height: 48,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [_orange, _orangeGlow]),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Center(
+                          child: Text(
+                            '${prenom.isNotEmpty ? prenom[0] : '?'}${nom.isNotEmpty ? nom[0] : ''}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('$prenom $nom',
+                                style: const TextStyle(
+                                  color: _textPrim,
+                                  fontWeight: FontWeight.bold, fontSize: 14),
+                                overflow: TextOverflow.ellipsis),
+                            Container(
+                              margin: const EdgeInsets.only(top: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: _orange.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text('Gestionnaire',
+                                  style: TextStyle(
+                                    color: _orange, fontSize: 10,
+                                    fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: _textSec, size: 20),
+                        onPressed: _toggleSidebar,
+                      ),
+                    ],
+                  ),
+                  if (entNom != null) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _surfaceHi,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(children: [
+                        const Icon(Icons.business_rounded,
+                            color: _textSec, size: 14),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(entNom,
+                              style: const TextStyle(
+                                  color: _textSec, fontSize: 12),
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                      ]),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          const Divider(color: _border, height: 1),
+          const SizedBox(height: 8),
+
+          // Navigation items
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              itemCount: _navItems.length,
+              itemBuilder: (_, i) {
+                final item = _navItems[i];
+                final selected = _pageIndex == i;
+                return _buildNavItem(item, i, selected, p);
+              },
+            ),
+          ),
+
+          // Déconnexion
+          const Divider(color: _border, height: 1),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: SafeArea(
+              top: false,
+              child: InkWell(
+                onTap: () {
+                  p.seDeconnecter();
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    (_) => false,
+                  );
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: _error.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: _error.withValues(alpha: 0.2)),
+                  ),
+                  child: const Row(children: [
+                    Icon(Icons.logout_rounded, color: _error, size: 20),
+                    SizedBox(width: 12),
+                    Text('Déconnexion',
+                        style: TextStyle(
+                            color: _error, fontWeight: FontWeight.w600)),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNavItem(_NavItem item, int index, bool selected, AppProvider p) {
+    // Badge pour alertes
+    int? badge;
+    if (index == 6) {
+      final n = p.alertesNonLues.length + p.demandesEnAttente.length;
+      if (n > 0) badge = n;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: InkWell(
+        onTap: () => _selectPage(index),
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: selected
+                ? _orange.withValues(alpha: 0.15)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: selected
+                ? Border.all(color: _orange.withValues(alpha: 0.3))
+                : null,
+          ),
+          child: Row(children: [
+            Icon(
+              selected ? item.iconActive : item.icon,
+              color: selected ? _orange : _textSec,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(item.label,
+                  style: TextStyle(
+                    color: selected ? _textPrim : _textSec,
+                    fontWeight: selected
+                        ? FontWeight.w600
+                        : FontWeight.normal,
+                    fontSize: 14,
+                  )),
+            ),
+            if (badge != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: _error,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text('$badge',
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 10,
+                        fontWeight: FontWeight.bold)),
+              ),
+          ]),
         ),
-        child: Row(
+      ),
+    );
+  }
+
+  // ── Page Dashboard ─────────────────────────────────────────────────────────
+  Widget _buildDashboardPage(AppProvider p) {
+    final stands = p.standsActifs;
+    final totalEspeces = stands.fold(0.0, (s, st) => s + st.soldeEspeces);
+    final totalSim = stands.fold(0.0, (s, st) => s + st.soldeTotalSim);
+    final totalCapital = totalEspeces + totalSim;
+
+    // Opérations aujourd'hui
+    final now = DateTime.now();
+    final debutJour = DateTime(now.year, now.month, now.day);
+    final opsAujourd = p.operations.where((o) =>
+        o.dateHeure.isAfter(debutJour)).toList();
+    final nbOps = opsAujourd.length;
+    final volumeJour = opsAujourd.fold(0.0, (s, o) => s + o.montant);
+    final commissions = opsAujourd.fold(0.0, (s, o) => s + o.ristourneCalculee);
+
+    // Alertes actives
+    final nbAlertes = p.alertesNonLues.length;
+    final nbDemandes = p.demandesEnAttente.length;
+
+    return RefreshIndicator(
+      color: _orange,
+      backgroundColor: _surface,
+      onRefresh: p.rafraichir,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icone, color: couleur, size: 22),
+            // ── Titre ────────────────────────────────────────────────────
+            Row(
+              children: [
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Tableau de bord',
+                          style: TextStyle(
+                            color: _textPrim,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          )),
+                      Text('Vue d\'ensemble de votre activité',
+                          style: TextStyle(color: _textSec, fontSize: 12)),
+                    ],
+                  ),
+                ),
+                _buildDateBadge(),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // ── Capital global ─────────────────────────────────────────────
+            _buildCapitalCard(totalCapital, totalEspeces, totalSim, stands.length),
+            const SizedBox(height: 16),
+
+            // ── KPIs du jour ───────────────────────────────────────────────
+            _buildKpiRow(nbOps, volumeJour, commissions, nbAlertes + nbDemandes),
+            const SizedBox(height: 20),
+
+            // ── Demandes en attente ───────────────────────────────────────
+            if (p.demandesEnAttente.isNotEmpty) ...[
+              _buildDemandesWidget(p),
+              const SizedBox(height: 20),
+            ],
+
+            // ── Section Stands ────────────────────────────────────────────
+            _buildSectionHeader(
+              'Mes stands actifs',
+              '${stands.length}',
+              onTap: () => _selectPage(1),
+            ),
+            const SizedBox(height: 10),
+            if (stands.isEmpty)
+              _buildEmptyStands()
+            else
+              ...stands.map((s) => _buildStandCard(s, p)),
+
+            // ── Opérations récentes ───────────────────────────────────────
+            if (opsAujourd.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              _buildSectionHeader(
+                'Opérations récentes',
+                "Aujourd'hui",
+                onTap: () => _selectPage(2),
+              ),
+              const SizedBox(height: 10),
+              ...opsAujourd.take(5).map((op) => _buildOperationTile(op)),
+            ],
+
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateBadge() {
+    final now = DateTime.now();
+    final jours = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+    final mois = [
+      'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun',
+      'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'
+    ];
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _border),
+      ),
+      child: Row(children: [
+        const Icon(Icons.calendar_today_rounded, color: _orange, size: 14),
+        const SizedBox(width: 6),
+        Text(
+          '${jours[now.weekday % 7]} ${now.day} ${mois[now.month - 1]}',
+          style: const TextStyle(color: _textSec, fontSize: 12),
+        ),
+      ]),
+    );
+  }
+
+  // ── Carte capital ──────────────────────────────────────────────────────────
+  Widget _buildCapitalCard(
+      double total, double especes, double sim, int nbStands) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFF6B00), Color(0xFFFF9500)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: _orange.withValues(alpha: 0.25),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.account_balance_wallet_rounded,
+                    color: Colors.white, size: 18),
+              ),
+              const SizedBox(width: 10),
+              const Text('Capital total',
+                  style: TextStyle(color: Colors.white70, fontSize: 13)),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text('$nbStands stand${nbStands > 1 ? 's' : ''}',
+                    style: const TextStyle(color: Colors.white, fontSize: 11)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _fmtF(total),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 30,
+              fontWeight: FontWeight.bold,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _buildMiniStat2(
+                      'Espèces', _fmtF(especes),
+                      Icons.payments_outlined, Colors.white),
+                ),
+                Container(
+                  width: 1, height: 36,
+                  color: Colors.white.withValues(alpha: 0.2),
+                ),
+                Expanded(
+                  child: _buildMiniStat2(
+                      'SIM Mobile', _fmtF(sim),
+                      Icons.sim_card_outlined, Colors.white),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMiniStat2(
+      String label, String valeur, IconData icon, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Column(children: [
+        Icon(icon, color: color.withValues(alpha: 0.8), size: 16),
+        const SizedBox(height: 4),
+        Text(valeur,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.bold, fontSize: 12),
+            textAlign: TextAlign.center,
+            overflow: TextOverflow.ellipsis),
+        Text(label,
+            style: TextStyle(
+                color: color.withValues(alpha: 0.7), fontSize: 10),
+            textAlign: TextAlign.center),
+      ]),
+    );
+  }
+
+  // ── KPIs ───────────────────────────────────────────────────────────────────
+  Widget _buildKpiRow(
+      int nbOps, double volume, double commissions, int nbAlertes) {
+    return Row(
+      children: [
+        Expanded(child: _buildKpiCard(
+          'Opérations\naujourd\'hui',
+          '$nbOps',
+          Icons.swap_horiz_rounded, _orange, false)),
+        const SizedBox(width: 10),
+        Expanded(child: _buildKpiCard(
+          'Volume\ndu jour',
+          _fmtF(volume),
+          Icons.trending_up_rounded, _success, false)),
+        const SizedBox(width: 10),
+        Expanded(child: _buildKpiCard(
+          'Ristournes\nestimées',
+          _fmtF(commissions),
+          Icons.percent_rounded, const Color(0xFF8B5CF6), false)),
+        const SizedBox(width: 10),
+        Expanded(child: _buildKpiCard(
+          'Alertes\nactives',
+          '$nbAlertes',
+          Icons.notifications_active_rounded,
+          nbAlertes > 0 ? _error : _success, nbAlertes > 0)),
+      ],
+    );
+  }
+
+  Widget _buildKpiCard(String label, String valeur, IconData icon,
+      Color color, bool pulse) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+            color: pulse ? color.withValues(alpha: 0.5) : _border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 30, height: 30,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color, size: 16),
+          ),
+          const SizedBox(height: 8),
+          Text(valeur,
+              style: TextStyle(
+                color: color,
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+              ),
+              overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 3),
+          Text(label,
+              style: const TextStyle(
+                  color: _textSec, fontSize: 10, height: 1.3),
+              maxLines: 2),
+        ],
+      ),
+    );
+  }
+
+  // ── Demandes ───────────────────────────────────────────────────────────────
+  Widget _buildDemandesWidget(AppProvider p) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _warning.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _warning.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.pending_actions_rounded,
+                color: _warning, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '${p.demandesEnAttente.length} demande(s) de rééquilibrage en attente',
+                style: const TextStyle(
+                    color: _warning,
+                    fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+            ),
+            TextButton(
+              onPressed: () => _voirDemandes(p),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                backgroundColor: _warning.withValues(alpha: 0.15),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Traiter',
+                  style: TextStyle(color: _warning, fontSize: 12)),
+            ),
+          ]),
+          ...p.demandesEnAttente.take(2).map((d) => Padding(
+            padding: const EdgeInsets.only(top: 6, left: 26),
+            child: Row(children: [
+              const Icon(Icons.circle, color: _warning, size: 5),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${d.standNom} — ${d.type.replaceAll('_', ' ')} '
+                  '${_fmt.format(d.montant)} FCFA',
+                  style: const TextStyle(
+                      color: _textSec, fontSize: 12),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ]),
+          )),
+        ],
+      ),
+    );
+  }
+
+  // ── Section header ─────────────────────────────────────────────────────────
+  Widget _buildSectionHeader(String titre, String badge,
+      {required VoidCallback onTap}) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(titre,
+              style: const TextStyle(
+                  color: _textPrim,
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold)),
+        ),
+        GestureDetector(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: _orange.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: _orange.withValues(alpha: 0.3)),
+            ),
+            child: Row(children: [
+              Text(badge,
+                  style: const TextStyle(
+                      color: _orange, fontSize: 12,
+                      fontWeight: FontWeight.bold)),
+              const SizedBox(width: 4),
+              const Icon(Icons.arrow_forward_ios_rounded,
+                  color: _orange, size: 10),
+            ]),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyStands() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _border),
+      ),
+      child: Column(children: [
+        Container(
+          width: 56, height: 56,
+          decoration: BoxDecoration(
+            color: _orange.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: const Icon(Icons.add_business_rounded,
+              color: _orange, size: 28),
+        ),
+        const SizedBox(height: 12),
+        const Text('Aucun stand créé',
+            style: TextStyle(
+                color: _textPrim, fontWeight: FontWeight.bold, fontSize: 15)),
+        const SizedBox(height: 6),
+        const Text(
+          'Créez vos premiers stands Mobile Money\npour commencer à suivre votre activité',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: _textSec, fontSize: 12, height: 1.5),
+        ),
+        const SizedBox(height: 16),
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _orange,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10)),
+          ),
+          icon: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+          label: const Text('Créer un stand',
+              style: TextStyle(color: Colors.white, fontSize: 13)),
+          onPressed: () => _selectPage(1),
+        ),
+      ]),
+    );
+  }
+
+  // ── Stand card ─────────────────────────────────────────────────────────────
+  Widget _buildStandCard(StandModel stand, AppProvider p) {
+    final ent = p.entrepriseActive;
+    final niveauEsp = stand.niveauAlerteEspeces(
+      ent?.seuilAlerteEspeces ?? 50000,
+      ent?.seuilCritiqueEspeces ?? 20000,
+    );
+    final couleurEsp = niveauEsp == 'critique'
+        ? _error
+        : niveauEsp == 'alerte'
+            ? _warning
+            : _success;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _border),
+      ),
+      child: Column(children: [
+        // Entête
+        Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(children: [
+            Container(
+              width: 42, height: 42,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    _orange.withValues(alpha: 0.2),
+                    _orangeGlow.withValues(alpha: 0.1),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.store_rounded, color: _orange, size: 20),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    estExpire
-                        ? 'Abonnement expiré !'
-                        : estEssai
-                            ? 'Essai gratuit — $joursRestants jour(s) restant(s)'
-                            : 'Abonnement — $joursRestants jour(s) restant(s)',
-                    style: TextStyle(color: couleur, fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                  Text(
-                    estExpire
-                        ? 'Renouvelez pour continuer à utiliser SikaFlow'
-                        : 'Cliquez pour renouveler votre abonnement',
-                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
-                  ),
+                  Text(stand.nom,
+                      style: const TextStyle(
+                        color: _textPrim,
+                        fontWeight: FontWeight.bold, fontSize: 14),
+                      overflow: TextOverflow.ellipsis),
+                  Row(children: [
+                    const Icon(Icons.place_outlined,
+                        color: _textSec, size: 12),
+                    const SizedBox(width: 3),
+                    Expanded(
+                      child: Text(stand.lieu,
+                          style: const TextStyle(
+                              color: _textSec, fontSize: 11),
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                  ]),
                 ],
               ),
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: couleur,
-                borderRadius: BorderRadius.circular(10),
+            if (stand.agentActuelNom != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _success.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                      color: _success.withValues(alpha: 0.3)),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.person_rounded,
+                      color: _success, size: 12),
+                  const SizedBox(width: 4),
+                  Text(
+                    stand.agentActuelNom!.split(' ').first,
+                    style: const TextStyle(
+                        color: _success, fontSize: 11,
+                        fontWeight: FontWeight.w500),
+                  ),
+                ]),
+              )
+            else
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _textSec.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text('Sans agent',
+                    style: TextStyle(color: _textSec, fontSize: 11)),
               ),
-              child: const Text('Renouveler', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-            ),
-          ],
+          ]),
         ),
-      ),
-    );
-  }
 
-  Widget _buildSyntheseCard(Map<String, double> synth, AppProvider provider) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: AppTheme.accentGradient,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.accentOrange.withValues(alpha: 0.3),
-            blurRadius: 15,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
+        // Divider stylé
+        Container(height: 1, color: _border),
+
+        // Soldes
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
             children: [
-              Icon(Icons.today_rounded, color: Colors.white70, size: 16),
-              SizedBox(width: 6),
-              Text('Synthèse du jour', style: TextStyle(color: Colors.white70, fontSize: 13)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            provider.formaterMontant(synth['total'] ?? 0),
-            style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Total général (espèces + SIM)',
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 12),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
+              // Espèces
               Expanded(
-                child: _smallStatItem(
+                child: _buildSoldeChip(
                   'Espèces',
-                  provider.formaterMontant(synth['especes'] ?? 0),
+                  _fmtF(stand.soldeEspeces),
                   Icons.payments_rounded,
+                  couleurEsp,
                 ),
               ),
-              Container(width: 1, height: 40, color: Colors.white24),
-              Expanded(
-                child: _smallStatItem(
-                  'Total SIM',
-                  provider.formaterMontant((synth['mtn'] ?? 0) + (synth['moov'] ?? 0) + (synth['celtiis'] ?? 0)),
+              const SizedBox(width: 8),
+              // SIM par opérateur
+              ...Operateur.values.map((op) => Expanded(
+                child: _buildSoldeChip(
+                  op.code,
+                  _fmtF(stand.soldeSim(op.code)),
                   Icons.sim_card_rounded,
-                ),
-              ),
-              Container(width: 1, height: 40, color: Colors.white24),
-              Expanded(
-                child: _smallStatItem(
-                  'Agents actifs',
-                  '${provider.mesAgents.length}',
-                  Icons.group_rounded,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _smallStatItem(String label, String valeur, IconData icon) {
-    return Column(
-      children: [
-        Icon(icon, color: Colors.white70, size: 16),
-        const SizedBox(height: 4),
-        Text(valeur, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-        Text(label, style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 10)),
-      ],
-    );
-  }
-
-  Widget _buildOperateursSection(Map<String, double> synth, AppProvider provider) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('Soldes par opérateur', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(child: OperateurCard(nom: 'MTN', montant: synth['mtn'] ?? 0, gradient: AppTheme.mtnGradient, icon: 'MTN', provider: provider)),
-            const SizedBox(width: 10),
-            Expanded(child: OperateurCard(nom: 'Moov', montant: synth['moov'] ?? 0, gradient: AppTheme.moovGradient, icon: 'Moov', provider: provider)),
-            const SizedBox(width: 10),
-            Expanded(child: OperateurCard(nom: 'Celtiis', montant: synth['celtiis'] ?? 0, gradient: AppTheme.celtiisGradient, icon: 'Celtiis', provider: provider)),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEvolutionSection(List<Map<String, dynamic>> donnees, AppProvider provider) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.cardDark,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.divider),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text('Évolution des flux', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-              ),
-              ...List.generate(_periodesLabels.length, (i) => GestureDetector(
-                onTap: () => setState(() => _selectedPeriode = i),
-                child: Container(
-                  margin: const EdgeInsets.only(left: 6),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: _selectedPeriode == i ? AppTheme.accentOrange : AppTheme.cardDarker,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    _periodesLabels[i],
-                    style: TextStyle(
-                      color: _selectedPeriode == i ? Colors.white : AppTheme.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  Color(op.couleurHex),
                 ),
               )),
             ],
           ),
-          const SizedBox(height: 20),
-          SizedBox(
-            height: 180,
-            child: donnees.isEmpty
-                ? const Center(child: Text('Aucune donnée', style: TextStyle(color: AppTheme.textHint)))
-                : _buildLineChart(donnees),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildSoldeChip(
+      String label, String valeur, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Column(children: [
+        Text(label,
+            style: TextStyle(color: color, fontSize: 10,
+                fontWeight: FontWeight.bold)),
+        const SizedBox(height: 3),
+        Text(valeur,
+            style: const TextStyle(
+              color: _textPrim, fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+            textAlign: TextAlign.center,
+            overflow: TextOverflow.ellipsis),
+      ]),
+    );
+  }
+
+  // ── Opération tile ─────────────────────────────────────────────────────────
+  Widget _buildOperationTile(OperationModel op) {
+    final icons = {
+      'depot': Icons.arrow_downward_rounded,
+      'retrait': Icons.arrow_upward_rounded,
+      'credit_forfait': Icons.phone_android_rounded,
+    };
+    final colors = {
+      'depot': _success,
+      'retrait': _error,
+      'credit_forfait': const Color(0xFF8B5CF6),
+    };
+    final color = colors[op.typeOperation] ?? _textSec;
+    final icon  = icons[op.typeOperation] ?? Icons.swap_horiz_rounded;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _border),
+      ),
+      child: Row(children: [
+        Container(
+          width: 36, height: 36,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
           ),
+          child: Icon(icon, color: color, size: 18),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${op.operateur} — ${op.typeOperation.replaceAll('_', ' ')}',
+                style: const TextStyle(
+                    color: _textPrim,
+                    fontWeight: FontWeight.w600, fontSize: 13),
+              ),
+              Text(op.standNom ?? '',
+                  style: const TextStyle(color: _textSec, fontSize: 11)),
+            ],
+          ),
+        ),
+        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Text(_fmtF(op.montant),
+              style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.bold, fontSize: 13)),
+          Text(
+            DateFormat('HH:mm').format(op.dateHeure),
+            style: const TextStyle(color: _textSec, fontSize: 11),
+          ),
+          if (op.ristourneCalculee > 0)
+            Text('+${NumberFormat('#,###', 'fr_FR').format(op.ristourneCalculee)} FCFA',
+                style: const TextStyle(color: _success, fontSize: 10)),
+        ]),
+      ]),
+    );
+  }
+
+  // ── Modals ─────────────────────────────────────────────────────────────────
+  void _voirNotifications(AppProvider p) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40, height: 4,
+            margin: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+                color: _border, borderRadius: BorderRadius.circular(2)),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Row(children: [
+              Icon(Icons.notifications_outlined, color: _orange),
+              SizedBox(width: 10),
+              Text('Notifications',
+                  style: TextStyle(
+                      color: _textPrim, fontSize: 16,
+                      fontWeight: FontWeight.bold)),
+            ]),
+          ),
+          if (p.demandesEnAttente.isEmpty && p.alertesNonLues.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Column(children: [
+                Icon(Icons.check_circle_outline_rounded,
+                    color: _success, size: 40),
+                SizedBox(height: 8),
+                Text('Aucune notification',
+                    style: TextStyle(color: _textSec)),
+              ]),
+            ),
+          if (p.demandesEnAttente.isNotEmpty)
+            ListTile(
+              leading: Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(
+                  color: _warning.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.pending_actions_rounded,
+                    color: _warning, size: 18),
+              ),
+              title: Text(
+                '${p.demandesEnAttente.length} demande(s) de rééquilibrage',
+                style: const TextStyle(color: _textPrim, fontSize: 13)),
+              subtitle: const Text('En attente de votre décision',
+                  style: TextStyle(color: _textSec, fontSize: 11)),
+              trailing: TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _voirDemandes(p);
+                },
+                child: const Text('Traiter',
+                    style: TextStyle(color: _warning)),
+              ),
+            ),
+          ...p.alertesNonLues.take(5).map((a) => ListTile(
+            leading: Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                color: (a.estCritique ? _error : _warning)
+                    .withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                a.estCritique
+                    ? Icons.error_rounded
+                    : Icons.warning_amber_rounded,
+                color: a.estCritique ? _error : _warning, size: 18,
+              ),
+            ),
+            title: Text(a.standNom,
+                style: const TextStyle(color: _textPrim, fontSize: 13)),
+            subtitle: Text(a.type.replaceAll('_', ' '),
+                style: const TextStyle(color: _textSec, fontSize: 11)),
+            trailing: IconButton(
+              icon: const Icon(Icons.close, color: _textSec, size: 18),
+              onPressed: () => p.marquerAlerteLue(a.id),
+            ),
+          )),
+          const SizedBox(height: 16),
         ],
       ),
     );
   }
 
-  Widget _buildLineChart(List<Map<String, dynamic>> donnees) {
-    final maxVal = donnees.map((d) => d['valeur'] as double).reduce((a, b) => a > b ? a : b);
-    final spots = donnees.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value['valeur'] as double)).toList();
-
-    int skipLabel = 1;
-    if (_selectedPeriode == 1) skipLabel = 4;
-    if (_selectedPeriode == 2) skipLabel = 1;
-
-    return LineChart(
-      LineChartData(
-        gridData: FlGridData(
-          show: true,
-          drawHorizontalLine: true,
-          drawVerticalLine: false,
-          horizontalInterval: maxVal > 0 ? maxVal / 4 : 1,
-          getDrawingHorizontalLine: (_) => const FlLine(color: AppTheme.divider, strokeWidth: 0.5),
-        ),
-        titlesData: FlTitlesData(
-          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 28,
-              interval: skipLabel.toDouble(),
-              getTitlesWidget: (value, meta) {
-                final idx = value.toInt();
-                if (idx >= 0 && idx < donnees.length && idx % skipLabel == 0) {
-                  return Text(
-                    donnees[idx]['label'] as String,
-                    style: const TextStyle(color: AppTheme.textHint, fontSize: 10),
-                  );
-                }
-                return const SizedBox.shrink();
+  void _voirDemandes(AppProvider p) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        maxChildSize: 0.9,
+        builder: (_, ctrl) => Column(children: [
+          Container(
+            width: 40, height: 4,
+            margin: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+                color: _border, borderRadius: BorderRadius.circular(2)),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Row(children: [
+              Icon(Icons.pending_actions_rounded, color: _warning),
+              SizedBox(width: 10),
+              Text('Demandes de rééquilibrage',
+                  style: TextStyle(
+                      color: _textPrim, fontSize: 16,
+                      fontWeight: FontWeight.bold)),
+            ]),
+          ),
+          Expanded(
+            child: ListView.builder(
+              controller: ctrl,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: p.demandesEnAttente.length,
+              itemBuilder: (_, i) {
+                final d = p.demandesEnAttente[i];
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: _surfaceHi,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: _border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Expanded(
+                          child: Text(d.standNom,
+                              style: const TextStyle(
+                                  color: _textPrim,
+                                  fontWeight: FontWeight.bold)),
+                        ),
+                        Text('${_fmt.format(d.montant)} FCFA',
+                            style: const TextStyle(
+                                color: _orange,
+                                fontWeight: FontWeight.bold)),
+                      ]),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${d.type.replaceAll('_', ' ')}'
+                        '${d.operateurSource != null ? ' — ${d.operateurSource}' : ''}'
+                        '${d.operateurDestination != null ? ' → ${d.operateurDestination}' : ''}',
+                        style: const TextStyle(
+                            color: _textSec, fontSize: 12),
+                      ),
+                      Text('Par : ${d.agentNom}',
+                          style: const TextStyle(
+                              color: _textSec, fontSize: 11)),
+                      const SizedBox(height: 4),
+                      Text('Motif : ${d.motif}',
+                          style: const TextStyle(
+                              color: _textSec, fontSize: 11),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 12),
+                      Row(children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: _error),
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 10),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: () async {
+                              await p.traiterDemandeReequilibrage(
+                                demandeId: d.id,
+                                approuve: false,
+                                motifRefus: 'Refusé par le gestionnaire',
+                              );
+                              if (ctx.mounted) Navigator.pop(ctx);
+                            },
+                            child: const Text('Refuser',
+                                style: TextStyle(color: _error)),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _success,
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 10),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: () async {
+                              await p.traiterDemandeReequilibrage(
+                                demandeId: d.id,
+                                approuve: true,
+                              );
+                              if (ctx.mounted) Navigator.pop(ctx);
+                            },
+                            child: const Text('Approuver',
+                                style: TextStyle(color: Colors.white)),
+                          ),
+                        ),
+                      ]),
+                    ],
+                  ),
+                );
               },
             ),
           ),
-        ),
-        borderData: FlBorderData(show: false),
-        lineBarsData: [
-          LineChartBarData(
-            spots: spots,
-            isCurved: true,
-            gradient: const LinearGradient(colors: [AppTheme.accentOrange, AppTheme.accentOrangeLight]),
-            barWidth: 3,
-            isStrokeCapRound: true,
-            dotData: const FlDotData(show: false),
-            belowBarData: BarAreaData(
-              show: true,
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  AppTheme.accentOrange.withValues(alpha: 0.3),
-                  AppTheme.accentOrange.withValues(alpha: 0.0),
-                ],
-              ),
-            ),
-          ),
-        ],
-        minX: 0,
-        maxX: (donnees.length - 1).toDouble(),
-        minY: 0,
-        maxY: maxVal * 1.2,
+        ]),
       ),
     );
   }
+}
 
-  Widget _buildRistournesSection(AppProvider provider) {
-    final dispo = provider.ristournesDisponibles;
-    final total = provider.totalRistournesDisponibles;
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+class _NavItem {
+  final IconData iconActive;
+  final IconData icon;
+  final String label;
+  const _NavItem(this.iconActive, this.icon, this.label);
+}
 
-    return GestureDetector(
-      onTap: () => setState(() => _navIndex = 2),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppTheme.cardDark,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppTheme.divider),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppTheme.success.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.star_rounded, color: AppTheme.success, size: 28),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Ristournes disponibles', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-                  const SizedBox(height: 2),
-                  Text(
-                    provider.formaterMontant(total),
-                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  Text('${dispo.length} ristourne(s) non retirée(s)', style: const TextStyle(color: AppTheme.textHint, fontSize: 11)),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right_rounded, color: AppTheme.textHint),
-          ],
-        ),
-      ),
-    );
-  }
+class _IconBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final int? badge;
+  const _IconBtn({required this.icon, required this.onTap, this.badge});
 
-  Widget _buildActionsRapides() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
       children: [
-        const Text('Actions rapides', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _actionButton(
-                'Retrait Espèces',
-                Icons.payments_rounded,
-                AppTheme.accentOrange,
-                () => setState(() => _navIndex = 3),
-              ),
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            width: 38, height: 38,
+            decoration: BoxDecoration(
+              color: const Color(0xFF252D3A),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFF313D52)),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _actionButton(
-                'Retrait Ristourne',
-                Icons.star_rounded,
-                AppTheme.success,
-                () => setState(() => _navIndex = 2),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _actionButton(String label, IconData icon, Color color, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                label,
-                style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w600),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _confirmerDeconnexion(AppProvider provider) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Déconnexion', style: TextStyle(color: Colors.white)),
-        content: const Text('Voulez-vous vous déconnecter ?', style: TextStyle(color: AppTheme.textSecondary)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              provider.seDeconnecter();
-            },
-            child: const Text('Déconnecter'),
+            child: Icon(icon, color: const Color(0xFFF0F4F8), size: 20),
           ),
-        ],
-      ),
+        ),
+        if (badge != null)
+          Positioned(
+            right: -4, top: -4,
+            child: Container(
+              width: 18, height: 18,
+              decoration: const BoxDecoration(
+                  color: Color(0xFFFF4444), shape: BoxShape.circle),
+              child: Center(
+                child: Text('$badge',
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 9,
+                        fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

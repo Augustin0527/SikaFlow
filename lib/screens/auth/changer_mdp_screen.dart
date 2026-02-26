@@ -39,17 +39,18 @@ class _ChangerMotDePasseScreenState extends State<ChangerMotDePasseScreen> {
     // Si session récente, on passe une chaîne vide pour l'ancien mdp
     final ancienMdp = _sessionRecente ? '' : _ancienCtrl.text;
 
-    final erreur = await provider.changerMotDePasse(
-      ancienMdp: ancienMdp,
-      nouveauMdp: _nouveauCtrl.text,
+    final resultat = await provider.changerMotDePasse(
+      ancienMotDePasse: ancienMdp,
+      nouveauMotDePasse: _nouveauCtrl.text,
     );
+    final erreur = resultat['success'] == true ? null : (resultat['erreur'] as String?);
 
     setState(() => _chargement = false);
     if (!mounted) return;
 
     if (erreur != null) {
       // Si erreur de session, proposer de re-tenter avec le mdp provisoire
-      if (erreur.contains('Session expirée') && _sessionRecente) {
+      if ((erreur).contains('Session expirée') && _sessionRecente) {
         setState(() => _sessionRecente = false);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Veuillez entrer votre code provisoire pour continuer.'),
@@ -155,7 +156,7 @@ class _ChangerMotDePasseScreenState extends State<ChangerMotDePasseScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(user?.nomComplet ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-                          Text(user?.roleLibelle ?? '', style: TextStyle(color: _roleCouleur(user?.role ?? ''), fontSize: 12)),
+                          Text(user?.role ?? '', style: TextStyle(color: _roleCouleur(user?.role ?? ''), fontSize: 12)),
                           if (user?.email?.isNotEmpty == true)
                             Text(user!.email!, style: const TextStyle(color: AppTheme.textHint, fontSize: 11)),
                         ],

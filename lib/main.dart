@@ -1,16 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 
 import 'firebase_options.dart';
 import 'theme/app_theme.dart';
 import 'providers/app_provider.dart';
-import 'models/user_model.dart';
-import 'models/point_journalier.dart';
-import 'models/ristourne.dart';
-import 'models/retrait.dart';
-import 'models/entreprise_model.dart';
 import 'screens/landing_page.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/changer_mdp_screen.dart';
@@ -29,41 +23,6 @@ void main() async {
     );
   } catch (e) {
     debugPrint('Firebase init error: $e');
-  }
-
-  // ── Hive : init avec gestion d'erreur (web compatible) ──────────────────
-  try {
-    await Hive.initFlutter();
-    Hive.registerAdapter(UserModelAdapter());
-    Hive.registerAdapter(PointJournalierAdapter());
-    Hive.registerAdapter(RistourneAdapter());
-    Hive.registerAdapter(RetraitAdapter());
-    Hive.registerAdapter(EntrepriseModelAdapter());
-
-    await Hive.openBox<UserModel>('users');
-    await Hive.openBox<PointJournalier>('points');
-    await Hive.openBox<Ristourne>('ristournes');
-    await Hive.openBox<Retrait>('retraits');
-    await Hive.openBox<EntrepriseModel>('entreprises');
-  } catch (e) {
-    // Sur le web, Hive peut échouer si les boîtes sont corrompues → on efface
-    debugPrint('Hive init error: $e — clearing storage...');
-    try {
-      await Hive.deleteFromDisk();
-      await Hive.initFlutter();
-      Hive.registerAdapter(UserModelAdapter());
-      Hive.registerAdapter(PointJournalierAdapter());
-      Hive.registerAdapter(RistourneAdapter());
-      Hive.registerAdapter(RetraitAdapter());
-      Hive.registerAdapter(EntrepriseModelAdapter());
-      await Hive.openBox<UserModel>('users');
-      await Hive.openBox<PointJournalier>('points');
-      await Hive.openBox<Ristourne>('ristournes');
-      await Hive.openBox<Retrait>('retraits');
-      await Hive.openBox<EntrepriseModel>('entreprises');
-    } catch (e2) {
-      debugPrint('Hive recovery also failed: $e2');
-    }
   }
 
   runApp(const SikaFlowApp());

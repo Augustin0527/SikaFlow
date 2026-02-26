@@ -2,64 +2,65 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 import '../models/user_model.dart';
-import '../models/point_journalier.dart';
-import '../models/ristourne.dart';
-import '../models/retrait.dart';
 import '../models/entreprise_model.dart';
+import '../models/stand_model.dart';
+import '../models/operation_model.dart';
 import '../models/abonnement_model.dart';
 
 class AppProvider extends ChangeNotifier {
+  // ignore: unused_field
   final _uuid = const Uuid();
   final _auth = FirebaseAuth.instance;
-  final _db = FirebaseFirestore.instance;
+  final _db   = FirebaseFirestore.instance;
 
-  UserModel? _utilisateurConnecte;
+  // ── État global ───────────────────────────────────────────────────────────
+  UserModel?       _utilisateurConnecte;
   EntrepriseModel? _entrepriseActive;
-  List<UserModel> _tousLesUtilisateurs = [];
-  final List<EntrepriseModel> _entreprises = [];
-  List<PointJournalier> _pointsJournaliers = [];
-  List<Ristourne> _ristournes = [];
-  List<Retrait> _retraits = [];
-  bool _chargement = false;
+  StandModel?      _standActuel; // stand de l'agent connecté
+  bool   _chargement = false;
   String? _erreur;
 
-  // ── Abonnements ──────────────────────────────────────────────────────────
-  AbonnementModel? _abonnementActif;
-  List<AbonnementModel> _historiqueAbonnements = [];
+  // ── Listes ────────────────────────────────────────────────────────────────
+  List<UserModel>           _membres         = [];
+  List<StandModel>          _stands          = [];
+  List<OperationModel>      _operations      = [];
+  List<TauxRistourne>       _tauxRistourne   = [];
+  List<AlerteModel>         _alertes         = [];
+  List<DemandeReequilibrage> _demandesReequil = [];
+  List<AbonnementModel>     _abonnements     = [];
 
-  UserModel? get utilisateurConnecte => _utilisateurConnecte;
-  EntrepriseModel? get entrepriseActive => _entrepriseActive;
-  List<UserModel> get tousLesUtilisateurs => _tousLesUtilisateurs;
-  List<EntrepriseModel> get entreprises => _entreprises;
-  List<PointJournalier> get pointsJournaliers => _pointsJournaliers;
-  List<Ristourne> get ristournes => _ristournes;
-  List<Retrait> get retraits => _retraits;
-  bool get chargement => _chargement;
-  String? get erreur => _erreur;
-  bool get estConnecte => _utilisateurConnecte != null;
-  bool get aucuneEntrepriseExiste => false;
+  // ── Getters ───────────────────────────────────────────────────────────────
+  UserModel?       get utilisateurConnecte  => _utilisateurConnecte;
+  EntrepriseModel? get entrepriseActive     => _entrepriseActive;
+  StandModel?      get standActuel          => _standActuel;
+  bool             get chargement           => _chargement;
+  bool             get estConnecte          => _utilisateurConnecte != null;
+  String?          get erreur               => _erreur;
 
-  // Abonnement getters
-  AbonnementModel? get abonnementActif => _abonnementActif;
-  List<AbonnementModel> get historiqueAbonnements => _historiqueAbonnements;
-  bool get abonnementValide => _abonnementActif?.estActif ?? false;
-  PlanAbonnement get planActuel => _abonnementActif?.plan ?? PlanAbonnement.essai;
+  List<UserModel>            get membres          => List.unmodifiable(_membres);
+  List<StandModel>           get stands           => List.unmodifiable(_stands);
+  List<OperationModel>       get operations       => List.unmodifiable(_operations);
+  List<TauxRistourne>        get tauxRistourne    => List.unmodifiable(_tauxRistourne);
+  List<AlerteModel>          get alertes          => List.unmodifiable(_alertes);
+  List<AlerteModel>          get alertesNonLues   => _alertes.where((a) => !a.lue).toList();
+  List<DemandeReequilibrage> get demandesReequil  => List.unmodifiable(_demandesReequil);
+  List<DemandeReequilibrage> get demandesEnAttente =>
+      _demandesReequil.where((d) => d.estEnAttente).toList();
+  List<AbonnementModel>      get abonnements      => List.unmodifiable(_abonnements);
 
-  // ═══════════════════════════════════════
-  // INITIALISATION — écoute Firebase Auth
-  // ═══════════════════════════════════════
+  List<UserModel> get agents      => _membres.where((u) => u.role == 'agent').toList();
+  List<UserModel> get controleurs => _membres.where((u) => u.role == 'controleur').toList();
+  List<StandModel> get standsActifs => _stands.where((s) => s.actif).toList();
+
+  // ── Initialisation ────────────────────────────────────────────────────────
   Future<void> initialiser() async {
     _setChargement(true);
 
-    // Timeout de sécurité : si Firebase ne répond pas en 8 secondes,
-    // on débloquer l'app et affiche la landing page
     Future.delayed(const Duration(seconds: 8), () {
       if (_chargement) {
-        debugPrint('Firebase Auth timeout — affichage landing page');
         _chargement = false;
         notifyListeners();
       }
@@ -68,10 +69,7 @@ class AppProvider extends ChangeNotifier {
     try {
       _auth.authStateChanges().listen((User? firebaseUser) async {
         if (firebaseUser == null) {
-          _utilisateurConnecte = null;
-          _entrepriseActive = null;
-          _chargement = false;
-          notifyListeners();
+          _viderEtat();
         } else {
           await _chargerProfilFirebase(firebaseUser.uid);
         }
@@ -83,36 +81,52 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  void _viderEtat() {
+    _utilisateurConnecte = null;
+    _entrepriseActive    = null;
+    _standActuel         = null;
+    _membres             = [];
+    _stands              = [];
+    _operations          = [];
+    _tauxRistourne       = [];
+    _alertes             = [];
+    _demandesReequil     = [];
+    _abonnements         = [];
+    _chargement          = false;
+    notifyListeners();
+  }
+
   Future<void> _chargerProfilFirebase(String uid) async {
     try {
       final userDoc = await _db.collection('users').doc(uid).get();
       if (!userDoc.exists) {
-        _utilisateurConnecte = null;
-        _setChargement(false);
-        notifyListeners();
+        _viderEtat();
         return;
       }
 
-      final data = userDoc.data()!;
-      _utilisateurConnecte = UserModel(
-        id: uid,
-        nom: (data['nom'] ?? '') as String,
-        prenom: (data['prenom'] ?? '') as String,
-        telephone: (data['telephone'] ?? '') as String,
-        email: data['email'] as String?,
-        motDePasse: '',
-        role: (data['role'] ?? 'agent') as String,
-        entrepriseId: data['entreprise_id'] as String?,
-        dateCreation: (data['date_creation'] as Timestamp?)?.toDate() ?? DateTime.now(),
-        motDePasseProvisoire: (data['mot_de_passe_provisoire'] ?? false) as bool,
-        actif: (data['actif'] ?? true) as bool,
-      );
+      _utilisateurConnecte = UserModel.fromFirestore(userDoc.data()!, uid);
 
+      // Charger les données selon le rôle
       if (_utilisateurConnecte!.entrepriseId != null) {
         await _chargerEntreprise(_utilisateurConnecte!.entrepriseId!);
+        await Future.wait([
+          _chargerMembres(),
+          _chargerStands(),
+          _chargerTauxRistourne(),
+          _chargerAlertes(),
+          _chargerDemandesReequilibrage(),
+        ]);
+
+        // Si agent : charger son stand
+        if (_utilisateurConnecte!.estAgent &&
+            _utilisateurConnecte!.standId != null) {
+          _standActuel = _stands.firstWhere(
+            (s) => s.id == _utilisateurConnecte!.standId,
+            orElse: () => _stands.first,
+          );
+        }
       }
 
-      _chargerDonneesLocales();
       _setChargement(false);
       notifyListeners();
     } catch (e) {
@@ -123,55 +137,17 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _chargerEntreprise(String entrepriseId) async {
-    try {
-      final doc = await _db.collection('entreprises').doc(entrepriseId).get();
-      if (doc.exists) {
-        final data = doc.data()!;
-        _entrepriseActive = EntrepriseModel(
-          id: entrepriseId,
-          nom: (data['nom'] ?? '') as String,
-          capitalDepart: ((data['capital_depart'] ?? 0) as num).toDouble(),
-          gestionnaireId: (data['gestionnaire_id'] ?? '') as String,
-          dateCreation: (data['date_creation'] as Timestamp?)?.toDate() ?? DateTime.now(),
-        );
-      }
-    } catch (e) {
-      debugPrint('Erreur chargement entreprise: $e');
-    }
-  }
-
-  void _chargerDonneesLocales() {
-    try {
-      if (Hive.isBoxOpen('points')) {
-        _pointsJournaliers = Hive.box<PointJournalier>('points').values.toList();
-      }
-      if (Hive.isBoxOpen('ristournes')) {
-        _ristournes = Hive.box<Ristourne>('ristournes').values.toList();
-      }
-      if (Hive.isBoxOpen('retraits')) {
-        _retraits = Hive.box<Retrait>('retraits').values.toList();
-      }
-    } catch (e) {
-      debugPrint('Hive local: $e');
-    }
-  }
-
-  // ═══════════════════════════════════════
-  // CONNEXION FIREBASE AUTH
-  // ═══════════════════════════════════════
-  Future<bool> seConnecter(String identifiant, String motDePasse) async {
+  // ── Connexion / Déconnexion ────────────────────────────────────────────────
+  Future<bool> seConnecter(String email, String motDePasse) async {
     _setChargement(true);
     _erreur = null;
     notifyListeners();
 
     try {
       final credential = await _auth.signInWithEmailAndPassword(
-        email: identifiant.trim(),
+        email: email.trim(),
         password: motDePasse,
       );
-      // Charger directement le profil sans attendre authStateChanges
-      // pour que la navigation soit immédiate
       if (credential.user != null) {
         await _chargerProfilFirebase(credential.user!.uid);
       }
@@ -189,625 +165,810 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  String _traduireErreur(String code) {
-    switch (code) {
-      case 'user-not-found': return 'Aucun compte avec cet identifiant.';
-      case 'wrong-password': return 'Mot de passe incorrect.';
-      case 'invalid-credential': return 'Email ou mot de passe incorrect.';
-      case 'too-many-requests': return 'Trop de tentatives. Réessayez plus tard.';
-      case 'network-request-failed': return 'Pas de connexion internet.';
-      default: return 'Erreur ($code).';
-    }
-  }
-
   void seDeconnecter() {
     _auth.signOut();
-    _utilisateurConnecte = null;
-    _entrepriseActive = null;
-    notifyListeners();
+    _viderEtat();
   }
 
-  // ═══════════════════════════════════════
-  // INSCRIPTION GESTIONNAIRE
-  // ═══════════════════════════════════════
-  /// [uidExistant] : UID du compte Firebase déjà créé lors de la vérification email.
-  /// Si fourni, on ne recrée PAS le compte Firebase Auth — on crée seulement les
-  /// documents Firestore (entreprise + user). 
-  Future<String?> inscrireGestionnaire({
-    required String nom,
-    required String prenom,
-    required String telephone,
+  // ── Inscription gestionnaire ──────────────────────────────────────────────
+  Future<Map<String, dynamic>> inscrireGestionnaire({
     required String email,
     required String motDePasse,
+    required String prenom,
+    required String nom,
+    required String telephone,
     required String nomEntreprise,
-    required double capitalDepart,
-    String? descriptionEntreprise,
-    String? uidExistant,        // ← nouveau paramètre
   }) async {
     try {
-      String uid;
-
-      if (uidExistant != null && uidExistant.isNotEmpty) {
-        // Compte déjà créé lors de la vérification email — utiliser l'UID existant
-        uid = uidExistant;
-      } else {
-        // Flux sans vérification préalable : créer le compte normalement
-        final credential = await _auth.createUserWithEmailAndPassword(
-          email: email.trim(),
-          password: motDePasse,
-        );
-        uid = credential.user!.uid;
-      }
-
-      final entrepriseRef = _db.collection('entreprises').doc();
-      final entrepriseId = entrepriseRef.id;
+      final credential = await _auth.createUserWithEmailAndPassword(
+        email: email, password: motDePasse,
+      );
+      final uid = credential.user!.uid;
       final maintenant = DateTime.now();
       final finEssai = maintenant.add(const Duration(days: 30));
 
+      // Créer l'entreprise
+      final entrepriseRef = _db.collection('entreprises').doc();
+      final entrepriseId = entrepriseRef.id;
       await entrepriseRef.set({
         'id': entrepriseId,
         'nom': nomEntreprise,
-        'capital_depart': capitalDepart,
-        'solde_actuel': capitalDepart,
         'gestionnaire_id': uid,
         'date_creation': Timestamp.fromDate(maintenant),
         'statut': 'essai',
         'plan': 'essai_gratuit',
         'date_fin_essai': Timestamp.fromDate(finEssai),
         'date_expiration_abonnement': Timestamp.fromDate(finEssai),
+        'mode_saisie': 'detail',
+        'delai_modification_heures': 30,
+        'agents_voient_autres_stands': false,
+        'visibilite_stands': 'ferme',
+        'seuil_alerte_especes': 50000,
+        'seuil_critique_especes': 20000,
+        'seuil_alerte_sim': 30000,
+        'seuil_critique_sim': 10000,
       });
 
+      // Créer le profil utilisateur
       await _db.collection('users').doc(uid).set({
         'id': uid,
         'prenom': prenom,
         'nom': nom,
-        'email': email.trim(),
+        'email': email,
         'telephone': telephone,
         'role': 'gestionnaire',
         'entreprise_id': entrepriseId,
+        'stand_id': null,
         'mot_de_passe_provisoire': false,
+        'actif': true,
+        'permissions': [],
         'date_creation': Timestamp.fromDate(maintenant),
-        'actif': true,
       });
 
-      // ✅ Charger immédiatement le profil dans le provider
-      // pour que AppRouter redirige vers le dashboard
-      await _chargerProfilFirebase(uid);
-
-      return null;
+      return {'success': true, 'entreprise_id': entrepriseId, 'user_id': uid};
     } on FirebaseAuthException catch (e) {
-      switch (e.code) {
-        case 'email-already-in-use': return 'Cet email est déjà utilisé.';
-        case 'weak-password': return 'Mot de passe trop faible (min. 6 caractères).';
-        case 'invalid-email': return 'Email invalide.';
-        default: return 'Erreur: ${e.message}';
+      return {'success': false, 'erreur': _traduireErreur(e.code)};
+    } catch (e) {
+      return {'success': false, 'erreur': 'Erreur inattendue: $e'};
+    }
+  }
+
+  // ── Chargement des données ─────────────────────────────────────────────────
+  Future<void> _chargerEntreprise(String entrepriseId) async {
+    try {
+      final doc = await _db.collection('entreprises').doc(entrepriseId).get();
+      if (doc.exists) {
+        _entrepriseActive = EntrepriseModel.fromFirestore(doc.data()!, doc.id);
       }
     } catch (e) {
-      return 'Erreur inattendue: $e';
+      debugPrint('Erreur chargement entreprise: $e');
     }
   }
 
-  // ═══════════════════════════════════════
-  // CHANGEMENT MOT DE PASSE
-  // ═══════════════════════════════════════
-  Future<String?> changerMotDePasse({
-    required String ancienMdp,
-    required String nouveauMdp,
-  }) async {
+  Future<void> _chargerMembres() async {
+    if (_utilisateurConnecte?.entrepriseId == null) return;
     try {
-      final user = _auth.currentUser!;
-
-      // Si ancienMdp est vide → l'utilisateur vient de se connecter
-      // via un lien Firebase (password reset) et est déjà authentifié récemment
-      if (ancienMdp.isNotEmpty) {
-        final credential = EmailAuthProvider.credential(
-          email: user.email!,
-          password: ancienMdp,
-        );
-        await user.reauthenticateWithCredential(credential);
-      }
-
-      await user.updatePassword(nouveauMdp);
-      await _db.collection('users').doc(user.uid).update({
-        'mot_de_passe_provisoire': false,
-        'mdp_temp': FieldValue.delete(),
-      });
-      if (_utilisateurConnecte != null) {
-        _utilisateurConnecte!.motDePasseProvisoire = false;
-        notifyListeners();
-      }
-      return null;
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
-        return 'Mot de passe actuel incorrect.';
-      }
-      if (e.code == 'requires-recent-login') {
-        return 'Session expirée. Reconnectez-vous et réessayez.';
-      }
-      return 'Erreur: ${e.message}';
-    } catch (e) {
-      return 'Erreur: $e';
-    }
-  }
-
-  // ═══════════════════════════════════════
-  // MEMBRES
-  // ═══════════════════════════════════════
-  String _genererMdpProvisoire() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    final rnd = DateTime.now().millisecondsSinceEpoch;
-    String code = '';
-    int val = rnd;
-    for (int i = 0; i < 6; i++) {
-      code += chars[val % chars.length];
-      val = (val ~/ chars.length) + i * 7;
-    }
-    return code;
-  }
-
-  // ═══════════════════════════════════════
-  // MEMBRES — AGENT & CONTRÔLEUR
-  // ═══════════════════════════════════════
-
-  /// Ajoute un agent : crée le doc Firestore + envoie un email d'invitation
-  /// via Firebase Password Reset. Ne déconnecte PAS le gestionnaire.
-  Future<Map<String, String>?> ajouterAgent({
-    required String nom,
-    required String prenom,
-    required String telephone,
-    required String email,
-  }) async {
-    return _ajouterMembre(
-      nom: nom, prenom: prenom,
-      telephone: telephone, email: email,
-      role: 'agent',
-    );
-  }
-
-  Future<Map<String, String>?> ajouterControleur({
-    required String nom,
-    required String prenom,
-    required String telephone,
-    required String email,
-  }) async {
-    return _ajouterMembre(
-      nom: nom, prenom: prenom,
-      telephone: telephone, email: email,
-      role: 'controleur',
-    );
-  }
-
-  Future<Map<String, String>?> _ajouterMembre({
-    required String nom,
-    required String prenom,
-    required String telephone,
-    required String email,
-    required String role,
-  }) async {
-    if (_utilisateurConnecte == null) return null;
-
-    final emailTrimmed = email.trim();
-    final entrepriseId = _utilisateurConnecte!.entrepriseId;
-    final gestionnaireId = _utilisateurConnecte!.id;
-
-    try {
-      // ── Étape 1 : vérifier si l'email existe déjà dans Firestore ──────────
-      final existing = await _db.collection('users')
-          .where('email', isEqualTo: emailTrimmed)
-          .limit(1)
+      final snap = await _db.collection('users')
+          .where('entreprise_id', isEqualTo: _utilisateurConnecte!.entrepriseId)
           .get();
-      if (existing.docs.isNotEmpty) {
-        return {'erreur': 'Cet email est déjà associé à un compte.'};
+      _membres = snap.docs
+          .map((d) => UserModel.fromFirestore(d.data(), d.id))
+          .where((u) => u.id != _utilisateurConnecte!.id)
+          .toList();
+    } catch (e) {
+      debugPrint('Erreur chargement membres: $e');
+    }
+  }
+
+  Future<void> _chargerStands() async {
+    if (_utilisateurConnecte?.entrepriseId == null) return;
+    try {
+      final snap = await _db.collection('stands')
+          .where('entreprise_id', isEqualTo: _utilisateurConnecte!.entrepriseId)
+          .get();
+      _stands = snap.docs
+          .map((d) => StandModel.fromFirestore(d.data(), d.id))
+          .toList();
+    } catch (e) {
+      debugPrint('Erreur chargement stands: $e');
+    }
+  }
+
+  Future<void> _chargerTauxRistourne() async {
+    if (_utilisateurConnecte?.entrepriseId == null) return;
+    try {
+      final snap = await _db.collection('taux_ristourne')
+          .where('entreprise_id', isEqualTo: _utilisateurConnecte!.entrepriseId)
+          .get();
+      _tauxRistourne = snap.docs
+          .map((d) => TauxRistourne.fromFirestore(d.data(), d.id))
+          .toList();
+    } catch (e) {
+      debugPrint('Erreur chargement taux ristourne: $e');
+    }
+  }
+
+  Future<void> _chargerAlertes() async {
+    if (_utilisateurConnecte?.entrepriseId == null) return;
+    try {
+      final snap = await _db.collection('alertes')
+          .where('entreprise_id', isEqualTo: _utilisateurConnecte!.entrepriseId)
+          .get();
+      _alertes = snap.docs
+          .map((d) => AlerteModel.fromFirestore(d.data(), d.id))
+          .toList();
+      _alertes.sort((a, b) => b.dateCreation.compareTo(a.dateCreation));
+    } catch (e) {
+      debugPrint('Erreur chargement alertes: $e');
+    }
+  }
+
+  Future<void> _chargerDemandesReequilibrage() async {
+    if (_utilisateurConnecte?.entrepriseId == null) return;
+    try {
+      final snap = await _db.collection('demandes_reequilibrage')
+          .where('entreprise_id', isEqualTo: _utilisateurConnecte!.entrepriseId)
+          .get();
+      _demandesReequil = snap.docs
+          .map((d) => DemandeReequilibrage.fromFirestore(d.data(), d.id))
+          .toList();
+      _demandesReequil.sort((a, b) => b.dateDemande.compareTo(a.dateDemande));
+    } catch (e) {
+      debugPrint('Erreur chargement demandes: $e');
+    }
+  }
+
+  Future<void> chargerOperationsStand(String standId, {int limite = 50}) async {
+    try {
+      final snap = await _db.collection('operations')
+          .where('stand_id', isEqualTo: standId)
+          .get();
+      _operations = snap.docs
+          .map((d) => OperationModel.fromFirestore(d.data(), d.id))
+          .toList();
+      _operations.sort((a, b) => b.dateHeure.compareTo(a.dateHeure));
+      if (_operations.length > limite) {
+        _operations = _operations.sublist(0, limite);
       }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Erreur chargement opérations: $e');
+    }
+  }
 
-      // ── Étape 2 : créer un UID unique pour ce membre ──────────────────────
-      final uid = _uuid.v4();
-      final mdpTemp = _genererMdpProvisoire();
+  // ── Rafraîchir toutes les données ─────────────────────────────────────────
+  Future<void> rafraichir() async {
+    if (_utilisateurConnecte?.entrepriseId == null) return;
+    _setChargement(true);
+    await Future.wait([
+      _chargerEntreprise(_utilisateurConnecte!.entrepriseId!),
+      _chargerMembres(),
+      _chargerStands(),
+      _chargerTauxRistourne(),
+      _chargerAlertes(),
+      _chargerDemandesReequilibrage(),
+    ]);
+    _setChargement(false);
+    notifyListeners();
+  }
 
-      // ── Étape 3 : créer le document Firestore (AVANT la création Auth)  ──
-      // On stocke le mdpTemp pour que le membre puisse s'identifier
-      await _db.collection('users').doc(uid).set({
-        'id': uid,
-        'nom': nom,
-        'prenom': prenom,
-        'telephone': telephone,
-        'email': emailTrimmed,
-        'role': role,
-        'entreprise_id': entrepriseId,
-        'gestionnaire_id': gestionnaireId,
-        'mot_de_passe_provisoire': true,
-        'mdp_temp': mdpTemp,           // stocké temporairement pour l'invitation
-        'invitation_envoyee': false,
-        'date_creation': Timestamp.now(),
-        'actif': true,
-      });
+  // ── Gestion des stands ────────────────────────────────────────────────────
+  Future<Map<String, dynamic>> creerStand({
+    required String nom,
+    required String lieu,
+    required List<SimCard> sims,
+    String? latitude,
+    String? longitude,
+  }) async {
+    try {
+      final ref = _db.collection('stands').doc();
+      final stand = StandModel(
+        id: ref.id,
+        nom: nom,
+        lieu: lieu,
+        entrepriseId: _utilisateurConnecte!.entrepriseId!,
+        sims: sims,
+        soldeEspeces: 0,
+        dateCreation: DateTime.now(),
+        latitude: latitude,
+        longitude: longitude,
+      );
+      await ref.set(stand.toFirestore());
+      _stands.add(stand);
+      notifyListeners();
+      return {'success': true, 'stand_id': ref.id};
+    } catch (e) {
+      return {'success': false, 'erreur': 'Erreur: $e'};
+    }
+  }
 
-      // ── Étape 4 : créer le compte Firebase Auth sans déconnecter  ─────────
-      // On utilise une 2ème instance Auth (ou la méthode admin via Firestore)
-      // → Ici on utilise le SDK client avec une astuce : créer via REST API
-      //   pour ne pas changer la session courante.
-      bool compteCreeSansDeconnexion = false;
-      try {
-        // Tentative via REST API Firebase Auth (ne déconnecte pas)
-        compteCreeSansDeconnexion = await _creerCompteViaRestApi(
-          uid: uid,
-          email: emailTrimmed,
-          mdp: mdpTemp,
-          displayName: '$prenom $nom',
+  Future<Map<String, dynamic>> affecterAgent({
+    required String standId,
+    required String agentId,
+  }) async {
+    try {
+      final agent = _membres.firstWhere((m) => m.id == agentId);
+      final maintenant = DateTime.now();
+
+      // Mettre à jour l'ancien stand de l'agent si besoin
+      final standIndex = _stands.indexWhere((s) => s.id == standId);
+      if (standIndex == -1) return {'success': false, 'erreur': 'Stand introuvable'};
+
+      final stand = _stands[standIndex];
+
+      // Clôturer l'affectation précédente dans l'historique
+      final historique = List<AffectationAgent>.from(stand.historiqueAgents);
+      if (stand.agentActuelId != null) {
+        final idx = historique.indexWhere(
+          (h) => h.agentId == stand.agentActuelId && h.dateFin == null,
         );
-      } catch (e) {
-        debugPrint('REST API échouée, fallback: $e');
-      }
-
-      if (!compteCreeSansDeconnexion) {
-        // Fallback : stocker les infos pour que le membre s'inscrive lui-même
-        // via le lien d'invitation (sans créer de compte Auth maintenant)
-        await _db.collection('users').doc(uid).update({
-          'invitation_mode': 'self_register',
-        });
-      } else {
-        await _db.collection('users').doc(uid).update({
-          'invitation_mode': 'pre_created',
-        });
-      }
-
-      // ── Étape 5 : envoyer l'email d'invitation ────────────────────────────
-      // On utilise sendPasswordResetEmail si le compte existe, sinon
-      // on envoie un email de bienvenue avec les infos de connexion temporaires
-      bool emailEnvoye = false;
-      if (compteCreeSansDeconnexion) {
-        try {
-          await _auth.sendPasswordResetEmail(
-            email: emailTrimmed,
-            actionCodeSettings: ActionCodeSettings(
-              url: 'https://sikaflow-c8869.web.app/?mode=newmember',
-              handleCodeInApp: false,
-            ),
+        if (idx != -1) {
+          historique[idx] = AffectationAgent(
+            agentId: historique[idx].agentId,
+            agentNom: historique[idx].agentNom,
+            dateDebut: historique[idx].dateDebut,
+            dateFin: maintenant,
           );
-          emailEnvoye = true;
-          await _db.collection('users').doc(uid).update({
-            'invitation_envoyee': true,
-          });
-        } catch (e) {
-          debugPrint('Erreur envoi email reset: $e');
         }
       }
 
-      // ── Étape 6 : rafraîchir la liste ────────────────────────────────────
-      await _chargerTousLesUtilisateurs();
+      // Ajouter nouvelle affectation
+      historique.add(AffectationAgent(
+        agentId: agentId,
+        agentNom: agent.nomComplet,
+        dateDebut: maintenant,
+      ));
+
+      // Mettre à jour Firestore — stand
+      await _db.collection('stands').doc(standId).update({
+        'agent_actuel_id': agentId,
+        'agent_actuel_nom': agent.nomComplet,
+        'date_affectation_agent': Timestamp.fromDate(maintenant),
+        'historique_agents': historique.map((h) => h.toMap()).toList(),
+      });
+
+      // Mettre à jour Firestore — agent
+      await _db.collection('users').doc(agentId).update({
+        'stand_id': standId,
+        'date_affectation_stand': Timestamp.fromDate(maintenant),
+      });
+
+      await rafraichir();
+      return {'success': true};
+    } catch (e) {
+      return {'success': false, 'erreur': 'Erreur: $e'};
+    }
+  }
+
+  // ── Gestion capital stand ─────────────────────────────────────────────────
+  Future<Map<String, dynamic>> ajusterCapitalStand({
+    required String standId,
+    required String type, // ajout_especes | retrait_especes | ajout_sim | retrait_sim
+    required double montant,
+    required String motif,
+    String? operateur,
+  }) async {
+    try {
+      final standIndex = _stands.indexWhere((s) => s.id == standId);
+      if (standIndex == -1) return {'success': false, 'erreur': 'Stand introuvable'};
+
+      final stand = _stands[standIndex];
+      final Map<String, dynamic> updates = {};
+
+      if (type == 'ajout_especes') {
+        updates['solde_especes'] = stand.soldeEspeces + montant;
+      } else if (type == 'retrait_especes') {
+        if (stand.soldeEspeces < montant) {
+          return {'success': false, 'erreur': 'Solde espèces insuffisant'};
+        }
+        updates['solde_especes'] = stand.soldeEspeces - montant;
+      } else if (type == 'ajout_sim' && operateur != null) {
+        final sims = stand.sims.map((s) {
+          if (s.operateur == operateur) return s.copyWith(solde: s.solde + montant);
+          return s;
+        }).toList();
+        updates['sims'] = sims.map((s) => s.toMap()).toList();
+      } else if (type == 'retrait_sim' && operateur != null) {
+        final sim = stand.sims.firstWhere((s) => s.operateur == operateur);
+        if (sim.solde < montant) {
+          return {'success': false, 'erreur': 'Solde SIM $operateur insuffisant'};
+        }
+        final sims = stand.sims.map((s) {
+          if (s.operateur == operateur) return s.copyWith(solde: s.solde - montant);
+          return s;
+        }).toList();
+        updates['sims'] = sims.map((s) => s.toMap()).toList();
+      }
+
+      await _db.collection('stands').doc(standId).update(updates);
+
+      // Enregistrer le mouvement
+      await _db.collection('mouvements_capital').doc().set({
+        'stand_id': standId,
+        'entreprise_id': _utilisateurConnecte!.entrepriseId,
+        'effectue_par': _utilisateurConnecte!.id,
+        'type': type,
+        'operateur': operateur,
+        'montant': montant,
+        'motif': motif,
+        'date': Timestamp.now(),
+      });
+
+      await rafraichir();
+      return {'success': true};
+    } catch (e) {
+      return {'success': false, 'erreur': 'Erreur: $e'};
+    }
+  }
+
+  // ── Saisie d'opération ────────────────────────────────────────────────────
+  Future<Map<String, dynamic>> saisirOperation({
+    required String standId,
+    required String operateur,
+    required String typeOperation,
+    required double montant,
+    String? numeroClient,
+    String? nomClient,
+  }) async {
+    try {
+      final user = _utilisateurConnecte!;
+      final standIndex = _stands.indexWhere((s) => s.id == standId);
+      if (standIndex == -1) return {'success': false, 'erreur': 'Stand introuvable'};
+
+      final stand = _stands[standIndex];
+      final maintenant = DateTime.now();
+
+      // Calculer la ristourne
+      final ristourne = _calculerRistourne(operateur, typeOperation, montant, maintenant);
+
+      // Vérifier les soldes avant d'enregistrer
+      final typeOp = TypeOperation.fromCode(typeOperation);
+      if (typeOp == TypeOperation.retrait) {
+        if (stand.soldeEspeces < montant) {
+          return {'success': false, 'erreur': 'Espèces insuffisantes pour ce retrait (${stand.soldeEspeces.toStringAsFixed(0)} FCFA disponibles)'};
+        }
+      } else {
+        final soldeSim = stand.soldeSim(operateur);
+        if (soldeSim < montant) {
+          return {'success': false, 'erreur': 'Solde SIM $operateur insuffisant (${soldeSim.toStringAsFixed(0)} FCFA disponibles)'};
+        }
+      }
+
+      // Délai de modification
+      final delaiHeures = _entrepriseActive?.delaiModificationHeures ?? 30;
+      // Créer l'opération
+      final ref = _db.collection('operations').doc();
+      final operation = OperationModel(
+        id: ref.id,
+        standId: standId,
+        standNom: stand.nom,
+        agentId: user.id,
+        agentNom: user.nomComplet,
+        entrepriseId: user.entrepriseId!,
+        operateur: operateur,
+        typeOperation: typeOperation,
+        montant: montant,
+        ristourneCalculee: ristourne,
+        numeroClient: numeroClient,
+        nomClient: nomClient,
+        dateHeure: maintenant,
+        modifiable: true,
+      );
+
+      await ref.set(operation.toFirestore());
+
+      // Mettre à jour les soldes du stand
+      final Map<String, dynamic> updates = {};
+      final impactEsp = operation.impactEspeces;
+      final impactSim = operation.impactSim;
+
+      updates['solde_especes'] = stand.soldeEspeces + impactEsp;
+
+      final simsUpdated = stand.sims.map((s) {
+        if (s.operateur == operateur) {
+          return s.copyWith(solde: s.solde + impactSim);
+        }
+        return s;
+      }).toList();
+      updates['sims'] = simsUpdated.map((s) => s.toMap()).toList();
+
+      await _db.collection('stands').doc(standId).update(updates);
+
+      // Vérifier les alertes après mise à jour
+      final newSoldeEspeces = stand.soldeEspeces + impactEsp;
+      final newSoldeSim = stand.soldeSim(operateur) + impactSim;
+      await _verifierEtCreerAlertes(stand, newSoldeEspeces, operateur, newSoldeSim);
+
+      // Planifier désactivation de la modifiabilité
+      Future.delayed(Duration(hours: delaiHeures), () async {
+        await _db.collection('operations').doc(ref.id).update({'modifiable': false});
+      });
+
+      await rafraichir();
+      return {'success': true, 'ristourne': ristourne};
+    } catch (e) {
+      return {'success': false, 'erreur': 'Erreur: $e'};
+    }
+  }
+
+  double _calculerRistourne(String operateur, String typeOperation, double montant, DateTime date) {
+    try {
+      final taux = _tauxRistourne.firstWhere(
+        (t) => t.operateur == operateur &&
+               t.typeOperation == typeOperation &&
+               t.isActifPour(date),
+      );
+      return taux.calculerRistourne(montant);
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  Future<void> _verifierEtCreerAlertes(
+    StandModel stand,
+    double newSoldeEspeces,
+    String operateur,
+    double newSoldeSim,
+  ) async {
+    if (_entrepriseActive == null) return;
+    final ent = _entrepriseActive!;
+
+    // Alerte espèces
+    String? typeAlerteEsp;
+    if (newSoldeEspeces <= ent.seuilCritiqueEspeces) {
+      typeAlerteEsp = 'especes_critique';
+    } else if (newSoldeEspeces <= ent.seuilAlerteEspeces) {
+      typeAlerteEsp = 'especes_basse';
+    }
+
+    if (typeAlerteEsp != null) {
+      await _db.collection('alertes').doc().set({
+        'stand_id': stand.id,
+        'stand_nom': stand.nom,
+        'entreprise_id': ent.id,
+        'type': typeAlerteEsp,
+        'operateur': null,
+        'montant_actuel': newSoldeEspeces,
+        'seuil': typeAlerteEsp == 'especes_critique'
+            ? ent.seuilCritiqueEspeces
+            : ent.seuilAlerteEspeces,
+        'lue': false,
+        'date_creation': Timestamp.now(),
+      });
+    }
+
+    // Alerte SIM
+    String? typeAlerteSim;
+    if (newSoldeSim <= ent.seuilCritiqueSim) {
+      typeAlerteSim = 'sim_critique';
+    } else if (newSoldeSim <= ent.seuilAlerteSim) {
+      typeAlerteSim = 'sim_basse';
+    }
+
+    if (typeAlerteSim != null) {
+      await _db.collection('alertes').doc().set({
+        'stand_id': stand.id,
+        'stand_nom': stand.nom,
+        'entreprise_id': ent.id,
+        'type': typeAlerteSim,
+        'operateur': operateur,
+        'montant_actuel': newSoldeSim,
+        'seuil': typeAlerteSim == 'sim_critique'
+            ? ent.seuilCritiqueSim
+            : ent.seuilAlerteSim,
+        'lue': false,
+        'date_creation': Timestamp.now(),
+      });
+    }
+  }
+
+  // ── Demande de rééquilibrage (par agent) ──────────────────────────────────
+  Future<Map<String, dynamic>> creerDemandeReequilibrage({
+    required String standId,
+    required String type,
+    required double montant,
+    required String motif,
+    String? operateurSource,
+    String? operateurDestination,
+  }) async {
+    try {
+      final user = _utilisateurConnecte!;
+      final stand = _stands.firstWhere((s) => s.id == standId);
+
+      final ref = _db.collection('demandes_reequilibrage').doc();
+      await ref.set({
+        'stand_id': standId,
+        'stand_nom': stand.nom,
+        'agent_id': user.id,
+        'agent_nom': user.nomComplet,
+        'entreprise_id': user.entrepriseId,
+        'type': type,
+        'operateur_source': operateurSource,
+        'operateur_destination': operateurDestination,
+        'montant': montant,
+        'motif': motif,
+        'statut': 'en_attente',
+        'date_demande': Timestamp.now(),
+        'date_traitement': null,
+        'traite_par': null,
+        'motif_refus': null,
+      });
+
+      await _chargerDemandesReequilibrage();
+      notifyListeners();
+      return {'success': true};
+    } catch (e) {
+      return {'success': false, 'erreur': 'Erreur: $e'};
+    }
+  }
+
+  // ── Approuver/Refuser rééquilibrage ───────────────────────────────────────
+  Future<Map<String, dynamic>> traiterDemandeReequilibrage({
+    required String demandeId,
+    required bool approuve,
+    String? motifRefus,
+  }) async {
+    try {
+      final demande = _demandesReequil.firstWhere((d) => d.id == demandeId);
+      final user = _utilisateurConnecte!;
+
+      await _db.collection('demandes_reequilibrage').doc(demandeId).update({
+        'statut': approuve ? 'approuve' : 'refuse',
+        'date_traitement': Timestamp.now(),
+        'traite_par': user.id,
+        'motif_refus': motifRefus,
+      });
+
+      // Si approuvé : appliquer le rééquilibrage sur le stand
+      if (approuve) {
+        switch (demande.type) {
+          case 'especes_vers_sim':
+            await ajusterCapitalStand(
+              standId: demande.standId,
+              type: 'retrait_especes',
+              montant: demande.montant,
+              motif: 'Rééquilibrage approuvé: ${demande.motif}',
+            );
+            await ajusterCapitalStand(
+              standId: demande.standId,
+              type: 'ajout_sim',
+              montant: demande.montant,
+              motif: 'Rééquilibrage approuvé: ${demande.motif}',
+              operateur: demande.operateurDestination,
+            );
+            break;
+          case 'sim_vers_especes':
+            await ajusterCapitalStand(
+              standId: demande.standId,
+              type: 'retrait_sim',
+              montant: demande.montant,
+              motif: 'Rééquilibrage approuvé: ${demande.motif}',
+              operateur: demande.operateurSource,
+            );
+            await ajusterCapitalStand(
+              standId: demande.standId,
+              type: 'ajout_especes',
+              montant: demande.montant,
+              motif: 'Rééquilibrage approuvé: ${demande.motif}',
+            );
+            break;
+          case 'sim_vers_sim':
+            await ajusterCapitalStand(
+              standId: demande.standId,
+              type: 'retrait_sim',
+              montant: demande.montant,
+              motif: 'Rééquilibrage approuvé: ${demande.motif}',
+              operateur: demande.operateurSource,
+            );
+            await ajusterCapitalStand(
+              standId: demande.standId,
+              type: 'ajout_sim',
+              montant: demande.montant,
+              motif: 'Rééquilibrage approuvé: ${demande.motif}',
+              operateur: demande.operateurDestination,
+            );
+            break;
+        }
+        // rééquilibrage effectué
+      }
+
+      await _chargerDemandesReequilibrage();
+      notifyListeners();
+      return {'success': true};
+    } catch (e) {
+      return {'success': false, 'erreur': 'Erreur: $e'};
+    }
+  }
+
+  // ── Taux de ristourne ─────────────────────────────────────────────────────
+  Future<Map<String, dynamic>> configurerTauxRistourne({
+    required String operateur,
+    required String typeOperation,
+    required double taux,
+    required DateTime dateDebut,
+    DateTime? dateFin,
+  }) async {
+    try {
+      final ref = _db.collection('taux_ristourne').doc();
+      await ref.set({
+        'entreprise_id': _utilisateurConnecte!.entrepriseId,
+        'operateur': operateur,
+        'type_operation': typeOperation,
+        'taux': taux,
+        'date_debut': Timestamp.fromDate(dateDebut),
+        'date_fin': dateFin != null ? Timestamp.fromDate(dateFin) : null,
+      });
+      await _chargerTauxRistourne();
+      notifyListeners();
+      return {'success': true};
+    } catch (e) {
+      return {'success': false, 'erreur': 'Erreur: $e'};
+    }
+  }
+
+  // ── Ajouter membre (agent/contrôleur) ─────────────────────────────────────
+  Future<Map<String, dynamic>> ajouterMembre({
+    required String email,
+    required String prenom,
+    required String nom,
+    required String telephone,
+    required String role,
+    List<String> permissions = const [],
+  }) async {
+    try {
+      final entrepriseId = _utilisateurConnecte!.entrepriseId!;
+      final motDePasseProv = _genererMotDePasse();
+
+      // Vérifier email existant
+      final existing = await _db.collection('users')
+          .where('email', isEqualTo: email)
+          .get();
+      if (existing.docs.isNotEmpty) {
+        return {'success': false, 'erreur': 'Cet email est déjà utilisé.'};
+      }
+
+      // Créer compte via REST API
+      final uid = await _creerCompteViaRestApi(email, motDePasseProv);
+      if (uid == null) return {'success': false, 'erreur': 'Impossible de créer le compte.'};
+
+      await _db.collection('users').doc(uid).set({
+        'id': uid,
+        'prenom': prenom,
+        'nom': nom,
+        'email': email,
+        'telephone': telephone,
+        'role': role,
+        'entreprise_id': entrepriseId,
+        'stand_id': null,
+        'mot_de_passe_provisoire': true,
+        'code_provisoire': motDePasseProv,
+        'actif': true,
+        'permissions': permissions,
+        'date_creation': Timestamp.now(),
+      });
+
+      await _chargerMembres();
+      notifyListeners();
 
       return {
-        'id': uid,
-        'email': emailTrimmed,
+        'success': true,
+        'user_id': uid,
+        'email': email,
         'prenom': prenom,
         'nom': nom,
         'telephone': telephone,
         'role': role,
-        'mdp_temp': mdpTemp,
-        'email_envoye': emailEnvoye ? 'true' : 'false',
+        'mot_de_passe_provisoire': motDePasseProv,
       };
     } catch (e) {
-      debugPrint('Erreur ajout membre ($role): $e');
-      return {'erreur': 'Erreur inattendue : $e'};
+      return {'success': false, 'erreur': 'Erreur: $e'};
     }
   }
 
-  /// Crée un compte Firebase Auth via la REST API (sans changer la session)
-  Future<bool> _creerCompteViaRestApi({
-    required String uid,
-    required String email,
-    required String mdp,
-    required String displayName,
-  }) async {
-    // Clé API Web Firebase (depuis firebase_options.dart)
-    const apiKey = 'AIzaSyApGdz7u5i10Fytoz6hcej63rVTKeH9Ivg';
-    const url = 'https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$apiKey';
-
+  Future<String?> _creerCompteViaRestApi(String email, String password) async {
     try {
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': email,
-          'password': mdp,
-          'displayName': displayName,
-          'returnSecureToken': false,
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        debugPrint('Compte créé via REST API pour $email');
-        return true;
-      } else {
-        final error = jsonDecode(response.body);
-        final errorMessage = error['error']?['message'] ?? 'Inconnu';
-        debugPrint('REST signUp erreur ($errorMessage) pour $email');
-        // EMAIL_EXISTS est aussi une réussite (compte déjà là)
-        if (errorMessage == 'EMAIL_EXISTS') return true;
-        return false;
+      // Utiliser la même API key que firebase_options.dart
+      const apiKey = String.fromEnvironment('FIREBASE_API_KEY',
+          defaultValue: 'AIzaSyD-YY2qUVN7GadnJjMfqovBL7tkJjEJBZQ');
+      final url = Uri.parse(
+          'https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$apiKey');
+      final resp = await http.post(url,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'email': email,
+            'password': password,
+            'returnSecureToken': true,
+          }));
+      if (resp.statusCode == 200) {
+        return jsonDecode(resp.body)['localId'] as String;
       }
-    } catch (e) {
-      debugPrint('REST signUp exception: $e');
-      return false;
-    }
-  }
-
-  /// Charge tous les utilisateurs de l'entreprise depuis Firestore
-  Future<void> _chargerTousLesUtilisateurs() async {
-    try {
-      final entrepriseId = _utilisateurConnecte?.entrepriseId;
-      if (entrepriseId == null) return;
-
-      final snapshot = await _db
-          .collection('users')
-          .where('entreprise_id', isEqualTo: entrepriseId)
-          .get();
-
-      _tousLesUtilisateurs = snapshot.docs.map((doc) {
-        final data = doc.data();
-        return UserModel(
-          id: doc.id,
-          nom: (data['nom'] ?? '') as String,
-          prenom: (data['prenom'] ?? '') as String,
-          telephone: (data['telephone'] ?? '') as String,
-          email: data['email'] as String?,
-          motDePasse: '',
-          role: (data['role'] ?? 'agent') as String,
-          entrepriseId: data['entreprise_id'] as String?,
-          dateCreation: (data['date_creation'] as Timestamp?)?.toDate() ?? DateTime.now(),
-          motDePasseProvisoire: (data['mot_de_passe_provisoire'] ?? false) as bool,
-          actif: (data['actif'] ?? true) as bool,
-        );
-      }).toList();
-
-      notifyListeners();
-    } catch (e) {
-      debugPrint('Erreur chargement utilisateurs: $e');
-    }
-  }
-
-  // ═══════════════════════════════════════
-  // GETTERS FILTRÉS
-  // ═══════════════════════════════════════
-  List<UserModel> get mesAgents => _tousLesUtilisateurs
-      .where((u) => u.role == 'agent' && u.entrepriseId == _utilisateurConnecte?.entrepriseId)
-      .toList();
-
-  List<UserModel> get mesControleurs => _tousLesUtilisateurs
-      .where((u) => u.role == 'controleur' && u.entrepriseId == _utilisateurConnecte?.entrepriseId)
-      .toList();
-
-  List<UserModel> agentsDuControleur(String controleurId) => mesAgents;
-  List<UserModel> agentsNonAssignes() => mesAgents;
-
-  List<PointJournalier> get mesPointsJournaliers {
-    if (_utilisateurConnecte == null) return [];
-    return _pointsJournaliers
-        .where((p) =>
-            p.agentId == _utilisateurConnecte!.id ||
-            p.gestionnaireId == _utilisateurConnecte!.id)
-        .toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
-  }
-
-  PointJournalier? getPointDuJour(String agentId) {
-    final auj = DateTime.now();
-    try {
-      return _pointsJournaliers.firstWhere(
-        (p) =>
-            p.agentId == agentId &&
-            p.date.day == auj.day &&
-            p.date.month == auj.month &&
-            p.date.year == auj.year,
-      );
+      return null;
     } catch (_) {
       return null;
     }
   }
 
-  Future<void> sauvegarderPoint(PointJournalier point) async {
+  String _genererMotDePasse() {
+    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    final random = List.generate(8, (i) => chars[DateTime.now().microsecond % chars.length + i < chars.length ? DateTime.now().microsecond % chars.length + i : i]);
+    return random.join();
+  }
+
+  // ── Marquer alerte comme lue ───────────────────────────────────────────────
+  Future<void> marquerAlerteLue(String alerteId) async {
+    await _db.collection('alertes').doc(alerteId).update({'lue': true});
+    final idx = _alertes.indexWhere((a) => a.id == alerteId);
+    if (idx != -1) {
+      _alertes[idx] = AlerteModel(
+        id: _alertes[idx].id,
+        standId: _alertes[idx].standId,
+        standNom: _alertes[idx].standNom,
+        entrepriseId: _alertes[idx].entrepriseId,
+        type: _alertes[idx].type,
+        operateur: _alertes[idx].operateur,
+        montantActuel: _alertes[idx].montantActuel,
+        seuil: _alertes[idx].seuil,
+        lue: true,
+        dateCreation: _alertes[idx].dateCreation,
+      );
+      notifyListeners();
+    }
+  }
+
+  // ── Mettre à jour config entreprise ──────────────────────────────────────
+  Future<Map<String, dynamic>> mettreAJourConfigEntreprise(
+      Map<String, dynamic> config) async {
     try {
-      if (Hive.isBoxOpen('points')) {
-        await Hive.box<PointJournalier>('points').put(point.id, point);
-        _pointsJournaliers = Hive.box<PointJournalier>('points').values.toList();
-      }
+      await _db.collection('entreprises')
+          .doc(_utilisateurConnecte!.entrepriseId)
+          .update(config);
+      await _chargerEntreprise(_utilisateurConnecte!.entrepriseId!);
+      notifyListeners();
+      return {'success': true};
     } catch (e) {
-      debugPrint('Erreur sauvegarde point: $e');
+      return {'success': false, 'erreur': 'Erreur: $e'};
     }
-    notifyListeners();
   }
 
-  Map<String, double> get syntheseAujourdhui {
-    return {'especes': 0, 'mtn': 0, 'moov': 0, 'celtiis': 0, 'total': 0};
-  }
-
-  List<Map<String, dynamic>> getDonneesEvolution(String periode) {
-    final maintenant = DateTime.now();
-    List<Map<String, dynamic>> result = [];
-    if (periode == 'semaine') {
-      for (int i = 6; i >= 0; i--) {
-        final date = maintenant.subtract(Duration(days: i));
-        result.add({'label': _jourCourt(date.weekday), 'valeur': 0.0, 'date': date});
-      }
-    } else {
-      for (int m = 1; m <= 12; m++) {
-        result.add({'label': _moisCourt(m), 'valeur': 0.0, 'date': DateTime(maintenant.year, m)});
-      }
-    }
-    return result;
-  }
-
-  String _jourCourt(int w) => ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'][w - 1];
-  String _moisCourt(int m) =>
-      ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'][m - 1];
-
-  List<Ristourne> get mesRistournes => _ristournes;
-  List<Ristourne> get ristournesDisponibles => _ristournes.where((r) => !r.retiree).toList();
-  double get totalRistournesDisponibles => ristournesDisponibles.fold(0.0, (s, r) => s + r.montant);
-
-  Future<void> ajouterRistourne(Ristourne ristourne) async {
+  // ── Changer mot de passe ──────────────────────────────────────────────────
+  Future<Map<String, dynamic>> changerMotDePasse({
+    required String ancienMotDePasse,
+    required String nouveauMotDePasse,
+  }) async {
     try {
-      if (Hive.isBoxOpen('ristournes')) {
-        await Hive.box<Ristourne>('ristournes').put(ristourne.id, ristourne);
-        _ristournes = Hive.box<Ristourne>('ristournes').values.toList();
-      }
+      final user = _auth.currentUser!;
+      final credential = EmailAuthProvider.credential(
+        email: user.email!, password: ancienMotDePasse,
+      );
+      await user.reauthenticateWithCredential(credential);
+      await user.updatePassword(nouveauMotDePasse);
+      await _db.collection('users').doc(user.uid).update({
+        'mot_de_passe_provisoire': false,
+      });
+      return {'success': true};
+    } on FirebaseAuthException catch (e) {
+      return {'success': false, 'erreur': _traduireErreur(e.code)};
     } catch (e) {
-      debugPrint('Erreur ajout ristourne: $e');
+      return {'success': false, 'erreur': 'Erreur: $e'};
     }
-    notifyListeners();
   }
 
-  List<Retrait> get mesRetraits => _retraits;
-
-  Future<void> effectuerRetrait(Retrait retrait) async {
-    try {
-      if (Hive.isBoxOpen('retraits')) {
-        await Hive.box<Retrait>('retraits').put(retrait.id, retrait);
-        _retraits = Hive.box<Retrait>('retraits').values.toList();
-      }
-    } catch (e) {
-      debugPrint('Erreur retrait: $e');
-    }
-    notifyListeners();
-  }
-
-  Future<void> assignerAgentAControleur({
-    required String agentId,
-    required String controleurId,
-  }) async => notifyListeners();
-
-  Future<void> desassignerAgentDeControleur({
-    required String agentId,
-    required String controleurId,
-  }) async => notifyListeners();
-
+  // ── Helpers ───────────────────────────────────────────────────────────────
   void _setChargement(bool val) {
     _chargement = val;
     notifyListeners();
   }
 
-  String genererNouvelId() => _uuid.v4();
-
-  UserModel? getUtilisateurParId(String id) {
-    try {
-      return _tousLesUtilisateurs.firstWhere((u) => u.id == id);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  String formaterMontant(double montant) {
-    if (montant >= 1000000) return '${(montant / 1000000).toStringAsFixed(1)} M FCFA';
-    if (montant >= 1000) return '${(montant / 1000).toStringAsFixed(0)} K FCFA';
-    return '${montant.toStringAsFixed(0)} FCFA';
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  // ABONNEMENTS
-  // ═══════════════════════════════════════════════════════════════
-
-  /// Charge l'abonnement actif + historique depuis Firestore
-  Future<void> chargerAbonnements() async {
-    final entrepriseId = _utilisateurConnecte?.entrepriseId;
-    if (entrepriseId == null) return;
-    try {
-      final snap = await _db
-          .collection('abonnements')
-          .where('entreprise_id', isEqualTo: entrepriseId)
-          .get();
-
-      final tous = snap.docs
-          .map((d) => AbonnementModel.fromFirestore(d.data()))
-          .toList()
-        ..sort((a, b) => b.dateCreation.compareTo(a.dateCreation));
-
-      _historiqueAbonnements = tous;
-
-      // Trouver l'abonnement actif le plus récent
-      try {
-        _abonnementActif = tous.firstWhere((a) => a.estActif);
-      } catch (_) {
-        // Sinon prendre le plus récent même expiré
-        _abonnementActif = tous.isNotEmpty ? tous.first : _creerAbonnementEssaiDepuisEntreprise();
-      }
-
-      notifyListeners();
-    } catch (e) {
-      debugPrint('Erreur chargement abonnements: $e');
-      // Créer un abonnement d'essai local si Firestore échoue
-      _abonnementActif = _creerAbonnementEssaiDepuisEntreprise();
-      notifyListeners();
-    }
-  }
-
-  /// Crée un AbonnementModel essai à partir des données Firestore de l'entreprise
-  AbonnementModel? _creerAbonnementEssaiDepuisEntreprise() {
-    final entreprise = _entrepriseActive;
-    final user = _utilisateurConnecte;
-    if (entreprise == null || user == null) return null;
-    final debut = entreprise.dateCreation;
-    return AbonnementModel(
-      id: 'essai_${entreprise.id}',
-      entrepriseId: entreprise.id,
-      gestionnaireId: user.id,
-      plan: PlanAbonnement.essai,
-      statut: StatutAbonnement.actif,
-      dateDebut: debut,
-      dateExpiration: debut.add(const Duration(days: 30)),
-      montantPaye: 0,
-      dateCreation: debut,
-    );
-  }
-
-  /// Enregistre un abonnement payé dans Firestore
-  Future<String?> enregistrerAbonnement({
-    required PlanAbonnement plan,
-    required String transactionId,
-    required String reference,
-  }) async {
-    final user = _utilisateurConnecte;
-    final entreprise = _entrepriseActive;
-    if (user == null || entreprise == null) return 'Utilisateur non connecté.';
-
-    try {
-      final maintenant = DateTime.now();
-      final expiration = maintenant.add(Duration(days: plan.dureeJours));
-      final id = _uuid.v4();
-
-      final abonnement = AbonnementModel(
-        id: id,
-        entrepriseId: entreprise.id,
-        gestionnaireId: user.id,
-        plan: plan,
-        statut: StatutAbonnement.actif,
-        dateDebut: maintenant,
-        dateExpiration: expiration,
-        montantPaye: plan.prix.toDouble(),
-        fedapayTransactionId: transactionId,
-        fedapayReference: reference,
-        dateCreation: maintenant,
-      );
-
-      // Sauvegarder dans Firestore
-      await _db.collection('abonnements').doc(id).set(abonnement.toFirestore());
-
-      // Mettre à jour l'entreprise avec le plan actif
-      await _db.collection('entreprises').doc(entreprise.id).update({
-        'statut': plan.code,
-        'plan': plan.code,
-        'date_expiration_abonnement': expiration.toIso8601String(),
-        'date_fin_essai': expiration.toIso8601String(),
-      });
-
-      // Mettre à jour localement
-      _abonnementActif = abonnement;
-      _historiqueAbonnements = [abonnement, ..._historiqueAbonnements];
-      notifyListeners();
-
-      return null;
-    } catch (e) {
-      debugPrint('Erreur enregistrement abonnement: $e');
-      return 'Erreur : $e';
+  String _traduireErreur(String code) {
+    switch (code) {
+      case 'user-not-found':     return 'Aucun compte avec cet identifiant.';
+      case 'wrong-password':     return 'Mot de passe incorrect.';
+      case 'invalid-credential': return 'Email ou mot de passe incorrect.';
+      case 'too-many-requests':  return 'Trop de tentatives. Réessayez plus tard.';
+      case 'network-request-failed': return 'Pas de connexion internet.';
+      case 'email-already-in-use':   return 'Cet email est déjà utilisé.';
+      case 'weak-password':      return 'Mot de passe trop faible (6 caractères minimum).';
+      default:                   return 'Erreur ($code).';
     }
   }
 }

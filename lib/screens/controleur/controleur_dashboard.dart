@@ -1,9 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../../providers/app_provider.dart';
+import '../../models/operation_model.dart';
+import '../../models/entreprise_model.dart';
 import '../../theme/app_theme.dart';
-import 'ristournes_screen.dart';
-import '../auth/changer_mdp_screen.dart';
+import '../auth/login_screen.dart';
+import '../gestionnaire/stands_screen.dart';
+import '../gestionnaire/operations_screen.dart';
+import '../gestionnaire/membres_screen.dart';
+import '../gestionnaire/alertes_screen.dart';
+
+const _bg       = Color(0xFF1E2530);
+const _surface  = Color(0xFF252D3A);
+const _border   = Color(0xFF313D52);
+const _orange   = Color(0xFFFF6B35);
+const _success  = Color(0xFF00C896);
+const _error    = Color(0xFFFF4444);
+const _textPrim = Color(0xFFF0F4F8);
+const _textSec  = Color(0xFF8A9BB0);
+const _sidebar  = Color(0xFF1A2130);
 
 class ControleurDashboard extends StatefulWidget {
   const ControleurDashboard({super.key});
@@ -13,323 +29,409 @@ class ControleurDashboard extends StatefulWidget {
 }
 
 class _ControleurDashboardState extends State<ControleurDashboard> {
-  int _navIndex = 0;
+  int _pageIndex = 0;
+  final _fmt = NumberFormat('#,###', 'fr_FR');
+
+  final List<_NavItem> _navItems = const [
+    _NavItem(Icons.dashboard_rounded, Icons.dashboard_outlined, 'Tableau de bord'),
+    _NavItem(Icons.store_rounded, Icons.store_outlined, 'Stands'),
+    _NavItem(Icons.receipt_long_rounded, Icons.receipt_long_outlined, 'Opérations'),
+    _NavItem(Icons.people_alt_rounded, Icons.people_alt_outlined, 'Membres'),
+    _NavItem(Icons.notifications_active_rounded, Icons.notifications_outlined, 'Alertes'),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AppProvider>().rafraichir();
+    });
+  }
+
+  Widget _buildPage(AppProvider p) {
+    switch (_pageIndex) {
+      case 0: return _buildDashboard(p);
+      case 1: return const StandsScreen();
+      case 2: return const OperationsScreen();
+      case 3: return const MembresScreen();
+      case 4: return const AlertesScreen();
+      default: return _buildDashboard(p);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
-      body: IndexedStack(
-        index: _navIndex,
-        children: [
-          _buildAccueil(),
-          _buildRistournesTab(),
-          _buildValidation(),
-        ],
-      ),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(color: AppTheme.primaryDark),
-        child: SafeArea(
-          child: BottomNavigationBar(
-            currentIndex: _navIndex,
-            onTap: (i) => setState(() => _navIndex = i),
-            items: const [
-              BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'Accueil'),
-              BottomNavigationBarItem(icon: Icon(Icons.star_rounded), label: 'Ristournes'),
-              BottomNavigationBarItem(icon: Icon(Icons.verified_rounded), label: 'Validation'),
+    return Consumer<AppProvider>(builder: (ctx, p, _) {
+      final user = p.utilisateurConnecte!;
+      final ent  = p.entrepriseActive;
+
+      return Scaffold(
+        backgroundColor: _bg,
+        appBar: AppBar(
+          backgroundColor: _sidebar,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.menu_rounded, color: _textPrim),
+            onPressed: () => _showDrawer(ctx, p),
+          ),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(ent?.nom ?? 'SikaFlow',
+                  style: const TextStyle(
+                      color: _textPrim, fontSize: 14,
+                      fontWeight: FontWeight.bold)),
+              Text('Contrôleur — ${user.prenom}',
+                  style: const TextStyle(color: _textSec, fontSize: 11)),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAccueil() {
-    return Consumer<AppProvider>(
-      builder: (ctx, provider, _) {
-        final user = provider.utilisateurConnecte!;
-        final points = provider.mesPointsJournaliers;
-        final enAttente = points.where((p) => !p.valide).length;
-        final valides = points.where((p) => p.valide).length;
-        final ristournes = provider.mesRistournes;
-        final ristournesTotalDispo = provider.totalRistournesDisponibles;
-
-        return CustomScrollView(
-          slivers: [
-            SliverAppBar(
-              expandedHeight: 130,
-              pinned: true,
-              backgroundColor: AppTheme.primaryDark,
-              flexibleSpace: FlexibleSpaceBar(
-                background: Container(
-                  decoration: const BoxDecoration(gradient: AppTheme.primaryGradient),
-                  padding: const EdgeInsets.fromLTRB(16, 50, 16, 0),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(color: AppTheme.moovBlue.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(14)),
-                        child: const Icon(Icons.verified_user_rounded, color: AppTheme.moovBlue, size: 26),
+          actions: [
+            if (p.alertesNonLues.isNotEmpty ||
+                p.demandesEnAttente.isNotEmpty)
+              Stack(children: [
+                IconButton(
+                  icon: const Icon(Icons.notifications_outlined,
+                      color: _textPrim),
+                  onPressed: () => setState(() => _pageIndex = 4),
+                ),
+                Positioned(
+                  right: 6, top: 6,
+                  child: Container(
+                    width: 16, height: 16,
+                    decoration: const BoxDecoration(
+                        color: _error, shape: BoxShape.circle),
+                    child: Center(
+                      child: Text(
+                        '${p.alertesNonLues.length + p.demandesEnAttente.length}',
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 9,
+                            fontWeight: FontWeight.bold),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(user.nomComplet, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                            const Text('Contrôleur', style: TextStyle(color: AppTheme.moovBlue, fontSize: 12)),
-                          ],
-                        ),
-                      ),
-                      PopupMenuButton<String>(
-                        icon: const Icon(Icons.more_vert_rounded, color: AppTheme.textSecondary),
-                        color: AppTheme.cardDarker,
-                        onSelected: (v) {
-                          if (v == 'mdp') {
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => const ChangerMotDePasseScreen()));
-                          } else {
-                            provider.seDeconnecter();
-                          }
-                        },
-                        itemBuilder: (_) => [
-                          const PopupMenuItem(value: 'mdp', child: Row(children: [Icon(Icons.lock_reset_rounded, color: AppTheme.accentOrange, size: 18), SizedBox(width: 8), Text('Changer mot de passe', style: TextStyle(color: Colors.white, fontSize: 13))])),
-                          const PopupMenuItem(value: 'logout', child: Row(children: [Icon(Icons.logout_rounded, color: AppTheme.error, size: 18), SizedBox(width: 8), Text('Déconnecter', style: TextStyle(color: AppTheme.error, fontSize: 13))])),
-                        ],
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.all(16),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  // Stats rapides
-                  Row(
-                    children: [
-                      Expanded(child: _statCard('En attente', '$enAttente', Icons.pending_rounded, AppTheme.warning)),
-                      const SizedBox(width: 12),
-                      Expanded(child: _statCard('Validés', '$valides', Icons.check_circle_rounded, AppTheme.success)),
-                      const SizedBox(width: 12),
-                      Expanded(child: _statCard('Ristournes', '${ristournes.length}', Icons.star_rounded, AppTheme.accentOrange)),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  // Ristournes dispo
-                  _buildRistournesDispoCard(provider.formaterMontant(ristournesTotalDispo), provider.ristournesDisponibles.length),
-                  const SizedBox(height: 16),
-                  // Points récents à valider
-                  _buildPointsAValider(provider),
-                  const SizedBox(height: 24),
-                ]),
-              ),
+              ]),
+            IconButton(
+              icon: const Icon(Icons.logout, color: _textSec),
+              onPressed: () {
+                p.seDeconnecter();
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (_) => false,
+                );
+              },
             ),
           ],
-        );
-      },
-    );
-  }
-
-  Widget _statCard(String titre, String valeur, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 22),
-          const SizedBox(height: 6),
-          Text(valeur, style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.bold)),
-          Text(titre, style: const TextStyle(color: AppTheme.textHint, fontSize: 10), textAlign: TextAlign.center),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRistournesDispoCard(String montant, int nb) {
-    return GestureDetector(
-      onTap: () => setState(() => _navIndex = 1),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [AppTheme.success.withValues(alpha: 0.15), AppTheme.success.withValues(alpha: 0.05)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(48),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                children: _navItems.asMap().entries.map((e) {
+                  final sel = _pageIndex == e.key;
+                  return GestureDetector(
+                    onTap: () => setState(() => _pageIndex = e.key),
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: sel
+                            ? _orange.withValues(alpha: 0.15)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                            color: sel
+                                ? _orange.withValues(alpha: 0.4)
+                                : _border),
+                      ),
+                      child: Row(children: [
+                        Icon(
+                          sel ? e.value.iconActive : e.value.icon,
+                          color: sel ? _orange : _textSec,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(e.value.label,
+                            style: TextStyle(
+                              color: sel ? _orange : _textSec,
+                              fontSize: 12,
+                              fontWeight: sel
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            )),
+                      ]),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
           ),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppTheme.success.withValues(alpha: 0.3)),
         ),
-        child: Row(
+        body: _buildPage(p),
+      );
+    });
+  }
+
+  Widget _buildDashboard(AppProvider p) {
+    final stands = p.standsActifs;
+    final totalEspeces = stands.fold(0.0, (s, st) => s + st.soldeEspeces);
+    final totalSim = stands.fold(0.0, (s, st) => s + st.soldeTotalSim);
+
+    final now = DateTime.now();
+    final debutJour = DateTime(now.year, now.month, now.day);
+    final opsJour = p.operations
+        .where((o) => o.dateHeure.isAfter(debutJour))
+        .toList();
+    final ristournesJour = opsJour.fold(
+        0.0, (s, o) => s + o.ristourneCalculee);
+
+    return RefreshIndicator(
+      color: _orange,
+      onRefresh: p.rafraichir,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.star_rounded, color: AppTheme.success, size: 30),
-            const SizedBox(width: 12),
-            Expanded(
+            // Capital global
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF1B6CA8), Color(0xFF2196F3)],
+                ),
+                borderRadius: BorderRadius.circular(18),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Ristournes disponibles', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-                  Text(montant, style: const TextStyle(color: AppTheme.success, fontSize: 18, fontWeight: FontWeight.bold)),
-                  Text('$nb ristourne(s) non retirée(s)', style: const TextStyle(color: AppTheme.textHint, fontSize: 11)),
+                  Text('Capital total (${stands.length} stands)',
+                      style: const TextStyle(
+                          color: Colors.white70, fontSize: 12)),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${_fmt.format(totalEspeces + totalSim)} FCFA',
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 26,
+                        fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(children: [
+                    _miniStat('Espèces',
+                        '${_fmt.format(totalEspeces)} F',
+                        Icons.payments_outlined),
+                    Container(width: 1, height: 36,
+                        color: Colors.white.withValues(alpha: 0.3)),
+                    _miniStat('SIM Mobile',
+                        '${_fmt.format(totalSim)} F',
+                        Icons.sim_card_outlined),
+                  ]),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded, color: AppTheme.success),
+            const SizedBox(height: 16),
+
+            // KPIs
+            Row(children: [
+              Expanded(child: _kpiCard('Ops du jour',
+                  '${opsJour.length}', Icons.swap_horiz_rounded, _orange)),
+              const SizedBox(width: 10),
+              Expanded(child: _kpiCard('Ristournes',
+                  '${_fmt.format(ristournesJour)} F',
+                  Icons.percent_rounded, const Color(0xFF8B5CF6))),
+              const SizedBox(width: 10),
+              Expanded(child: _kpiCard('Alertes',
+                  '${p.alertesNonLues.length}',
+                  Icons.notifications_active_rounded,
+                  p.alertesNonLues.isEmpty ? _success : _error)),
+            ]),
+            const SizedBox(height: 20),
+
+            // Demandes en attente
+            if (p.demandesEnAttente.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFB300).withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                      color: const Color(0xFFFFB300).withValues(alpha: 0.3)),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.pending_actions_rounded,
+                      color: Color(0xFFFFB300)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '${p.demandesEnAttente.length} demande(s) en attente',
+                      style: const TextStyle(
+                          color: Color(0xFFFFB300),
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => setState(() => _pageIndex = 4),
+                    child: const Text('Voir',
+                        style: TextStyle(color: Color(0xFFFFB300))),
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 20),
+            ],
+
+            // Stands
+            const Text('Stands',
+                style: TextStyle(
+                    color: _textPrim, fontSize: 15,
+                    fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            ...stands.take(5).map((s) {
+              final niveauEsp = s.niveauAlerteEspeces(
+                p.entrepriseActive?.seuilAlerteEspeces ?? 50000,
+                p.entrepriseActive?.seuilCritiqueEspeces ?? 20000,
+              );
+              final couleur = niveauEsp == 'critique'
+                  ? _error
+                  : niveauEsp == 'alerte'
+                      ? const Color(0xFFFFB300)
+                      : _success;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _border),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.store_rounded, color: _orange, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(s.nom,
+                            style: const TextStyle(
+                                color: _textPrim,
+                                fontWeight: FontWeight.bold)),
+                        Text(s.lieu,
+                            style: const TextStyle(
+                                color: _textSec, fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                    Text('${_fmt.format(s.soldeEspeces)} F',
+                        style: TextStyle(
+                            color: couleur,
+                            fontWeight: FontWeight.bold, fontSize: 12)),
+                    Text('${_fmt.format(s.soldeTotalSim)} F SIM',
+                        style: const TextStyle(
+                            color: _textSec, fontSize: 11)),
+                  ]),
+                ]),
+              );
+            }),
+
+            const SizedBox(height: 24),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildPointsAValider(AppProvider provider) {
-    final points = provider.mesPointsJournaliers.where((p) => !p.valide).take(5).toList();
-    if (points.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: AppTheme.cardDark, borderRadius: BorderRadius.circular(20), border: Border.all(color: AppTheme.divider)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Expanded(child: Text('Points à valider', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold))),
-              GestureDetector(
-                onTap: () => setState(() => _navIndex = 2),
-                child: const Text('Voir tout', style: TextStyle(color: AppTheme.accentOrange, fontSize: 12)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ...points.map((p) {
-            final agent = provider.getUtilisateurParId(p.agentId);
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  const Icon(Icons.pending_rounded, color: AppTheme.warning, size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text('${agent?.nomComplet ?? ''} — ${p.dateFormatee}', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12))),
-                  Text(provider.formaterMontant(p.totalGeneral), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRistournesTab() {
-    return const RistournesScreen();
-  }
-
-  Widget _buildValidation() {
-    return Consumer<AppProvider>(
-      builder: (ctx, provider, _) {
-        final points = provider.mesPointsJournaliers.where((p) => !p.valide).toList();
-        return Scaffold(
-          backgroundColor: AppTheme.backgroundDark,
-          appBar: AppBar(title: const Text('Validation des points'), backgroundColor: AppTheme.primaryDark),
-          body: points.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.check_circle_rounded, size: 60, color: AppTheme.success),
-                      const SizedBox(height: 12),
-                      const Text('Tous les points sont validés !', style: TextStyle(color: AppTheme.success, fontSize: 16, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: points.length,
-                  itemBuilder: (ctx, i) => _buildPointCard(points[i], provider),
-                ),
-        );
-      },
-    );
-  }
-
-  Widget _buildPointCard(point, AppProvider provider) {
-    final agent = provider.getUtilisateurParId(point.agentId);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppTheme.cardDark,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.divider),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: AppTheme.warning.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.person_rounded, color: AppTheme.warning, size: 18),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(agent?.nomComplet ?? point.agentId, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                    Text(point.dateFormatee, style: const TextStyle(color: AppTheme.textHint, fontSize: 12)),
-                  ],
-                ),
-              ),
-              Text(provider.formaterMontant(point.totalGeneral), style: const TextStyle(color: AppTheme.accentOrange, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _detailOp('MTN', point.soldeMTN, AppTheme.mtnYellow, provider),
-              _detailOp('Moov', point.soldeMoov, AppTheme.moovBlue, provider),
-              _detailOp('Celtiis', point.soldeCeltiis, AppTheme.celtiisRed, provider),
-              _detailOp('Cash', point.montantEspeces, AppTheme.accentOrange, provider),
-            ],
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                point.valide = true;
-                point.validateurId = provider.utilisateurConnecte!.id;
-                point.dateValidation = DateTime.now();
-                provider.sauvegarderPoint(point);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Point de ${agent?.nomComplet ?? ''} validé !'), backgroundColor: AppTheme.success, behavior: SnackBarBehavior.floating),
-                );
-              },
-              icon: const Icon(Icons.check_rounded),
-              label: const Text('VALIDER CE POINT'),
-              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.success),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _detailOp(String label, double montant, Color color, AppProvider provider) {
+  Widget _miniStat(String label, String val, IconData icon) {
     return Expanded(
-      child: Column(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Column(children: [
+          Icon(icon, color: Colors.white70, size: 16),
+          const SizedBox(height: 3),
+          Text(val,
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+              overflow: TextOverflow.ellipsis),
+          Text(label,
+              style: const TextStyle(color: Colors.white70, fontSize: 10)),
+        ]),
+      ),
+    );
+  }
+
+  Widget _kpiCard(String label, String val, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, color: color, size: 18),
+        const SizedBox(height: 6),
+        Text(val,
+            style: TextStyle(
+                color: color, fontWeight: FontWeight.bold, fontSize: 13),
+            overflow: TextOverflow.ellipsis),
+        Text(label,
+            style: const TextStyle(color: _textSec, fontSize: 10)),
+      ]),
+    );
+  }
+
+  void _showDrawer(BuildContext ctx, AppProvider p) {
+    showModalBottomSheet(
+      context: ctx,
+      backgroundColor: _surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: const TextStyle(color: AppTheme.textHint, fontSize: 10)),
-          Text('${(montant / 1000).toStringAsFixed(0)}K', style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
+          Container(
+            width: 40, height: 4,
+            margin: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+                color: _border, borderRadius: BorderRadius.circular(2)),
+          ),
+          ..._navItems.asMap().entries.map((e) => ListTile(
+            leading: Icon(e.value.iconActive, color: _orange),
+            title: Text(e.value.label,
+                style: const TextStyle(color: _textPrim)),
+            onTap: () {
+              Navigator.pop(ctx);
+              setState(() => _pageIndex = e.key);
+            },
+          )),
+          const Divider(color: _border),
+          ListTile(
+            leading: const Icon(Icons.logout_rounded, color: _error),
+            title: const Text('Déconnexion',
+                style: TextStyle(color: _error)),
+            onTap: () {
+              Navigator.pop(ctx);
+              p.seDeconnecter();
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+                (_) => false,
+              );
+            },
+          ),
+          const SizedBox(height: 8),
         ],
       ),
     );
   }
+}
+
+class _NavItem {
+  final IconData iconActive;
+  final IconData icon;
+  final String label;
+  const _NavItem(this.iconActive, this.icon, this.label);
 }

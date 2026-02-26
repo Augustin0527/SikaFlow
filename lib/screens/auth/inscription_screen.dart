@@ -220,17 +220,15 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
     final uidExistant = _tempUser?.uid;
     _tempUser = null; // libérer la référence locale (ne pas supprimer)
 
-    final erreur = await provider.inscrireGestionnaire(
+    final resultat = await provider.inscrireGestionnaire(
       nom:                  _nomCtrl.text.trim(),
       prenom:               _prenomCtrl.text.trim(),
       telephone:            telComplet,
       email:                _emailCtrl.text.trim(),
       motDePasse:           _passCtrl.text,
       nomEntreprise:        _nomEntrepriseCtrl.text.trim(),
-      capitalDepart:        double.parse(_capitalCtrl.text.replaceAll(' ', '')),
-      descriptionEntreprise: _descCtrl.text.isNotEmpty ? _descCtrl.text.trim() : null,
-      uidExistant:          uidExistant,
     );
+    final erreur = resultat['success'] == true ? null : (resultat['erreur'] as String?);
 
     if (!mounted) return;
     setState(() => _chargement = false);

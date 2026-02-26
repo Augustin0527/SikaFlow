@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../providers/app_provider.dart';
 
 class OperateurCard extends StatelessWidget {
@@ -53,7 +54,7 @@ class OperateurCard extends StatelessWidget {
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
-              provider.formaterMontant(montant),
+              NumberFormat('#,###', 'fr_FR').format(montant) + ' FCFA',
               style: TextStyle(
                 color: nom == 'MTN' ? Colors.black : Colors.white,
                 fontSize: 14,
