@@ -10,6 +10,7 @@ import '../models/entreprise_model.dart';
 import '../models/stand_model.dart';
 import '../models/operation_model.dart';
 import '../models/abonnement_model.dart';
+import '../models/plan_config_model.dart';
 
 class AppProvider extends ChangeNotifier {
   // ignore: unused_field
@@ -32,6 +33,9 @@ class AppProvider extends ChangeNotifier {
   List<AlerteModel>         _alertes         = [];
   List<DemandeReequilibrage> _demandesReequil = [];
   List<AbonnementModel>     _abonnements     = [];
+  List<PlanConfig>           _plansConfig     = [];
+  ConfigAbonnementGlobal     _configGlobal    = const ConfigAbonnementGlobal();
+  StreamSubscription<List<PlanConfig>>? _plansSub;
 
   // ── Getters ───────────────────────────────────────────────────────────────
   UserModel?       get utilisateurConnecte  => _utilisateurConnecte;
@@ -53,6 +57,13 @@ class AppProvider extends ChangeNotifier {
   List<DemandeReequilibrage> get demandesEnAttente =>
       _demandesReequil.where((d) => d.estEnAttente).toList();
   List<AbonnementModel>      get abonnements      => List.unmodifiable(_abonnements);
+  List<PlanConfig>           get plansConfig      => List.unmodifiable(_plansConfig);
+  List<PlanConfig>           get plansActifs      => _plansConfig.where((p) => p.actif).toList();
+  ConfigAbonnementGlobal     get configGlobal     => _configGlobal;
+
+  /// Plan recommandé selon le nombre de stands actifs
+  PlanConfig planRecommande(int nbStands) =>
+      ConfigAbonnementService.planPourNombreDeStands(_plansConfig, nbStands);
 
   List<UserModel> get agents      => _membres.where((u) => u.role == 'agent').toList();
   List<UserModel> get controleurs => _membres.where((u) => u.role == 'controleur').toList();
@@ -61,6 +72,9 @@ class AppProvider extends ChangeNotifier {
   // ── Initialisation ────────────────────────────────────────────────────────
   Future<void> initialiser() async {
     _setChargement(true);
+
+    // Charger la config des plans en parallèle (pas bloquant)
+    chargerPlansConfig();
 
     try {
       // Attendre le premier événement authStateChanges avec timeout 4s
@@ -116,6 +130,28 @@ class AppProvider extends ChangeNotifier {
     _abonnements         = [];
     _chargement          = false;
     notifyListeners();
+  }
+
+  // ── Plans config (chargés au démarrage, streamés en temps réel) ───────────
+  Future<void> chargerPlansConfig() async {
+    try {
+      // Chargement initial
+      _plansConfig  = await ConfigAbonnementService.chargerPlans();
+      _configGlobal = await ConfigAbonnementService.chargerGlobal();
+      notifyListeners();
+      // Stream en temps réel
+      await _plansSub?.cancel();
+      _plansSub = ConfigAbonnementService.plansStream().listen((plans) {
+        _plansConfig = plans;
+        notifyListeners();
+      });
+      ConfigAbonnementService.globalStream().listen((global) {
+        _configGlobal = global;
+        notifyListeners();
+      });
+    } catch (e) {
+      debugPrint('[AppProvider] chargerPlansConfig error: $e');
+    }
   }
 
   Future<void> _chargerProfilFirebase(String uid) async {

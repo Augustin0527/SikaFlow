@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
-import '../models/abonnement_model.dart';
+import '../models/plan_config_model.dart';
 import 'auth/login_screen.dart';
 import 'auth/inscription_screen.dart';
 
@@ -22,6 +22,9 @@ class _LandingPageState extends State<LandingPage>
   final ScrollController _scrollController = ScrollController();
   bool _periodeAnnuelle = false;
   final _pricingFmt = NumberFormat('#,###', 'fr_FR');
+  List<PlanConfig>        _plans  = [];
+  ConfigAbonnementGlobal  _cfg    = const ConfigAbonnementGlobal();
+  bool _plansCharges = false;
 
   @override
   void initState() {
@@ -43,6 +46,18 @@ class _LandingPageState extends State<LandingPage>
     _heroController.forward();
     Future.delayed(const Duration(milliseconds: 400), () {
       if (mounted) _featuresController.forward();
+    });
+    // Charger les plans dynamiques depuis Firestore
+    _chargerPlans();
+  }
+
+  Future<void> _chargerPlans() async {
+    final plans = await ConfigAbonnementService.chargerPlans();
+    final cfg   = await ConfigAbonnementService.chargerGlobal();
+    if (mounted) setState(() {
+      _plans        = plans.where((p) => p.actif).toList();
+      _cfg          = cfg;
+      _plansCharges = true;
     });
   }
 
@@ -1056,6 +1071,10 @@ class _LandingPageState extends State<LandingPage>
   // ════════════════════════════════════════════════════════════════════════════
 
   Widget _buildPricingSection(bool isWide) {
+    final remise  = _cfg.remiseAnnuelle;
+    final pct     = (remise * 100).round();
+    final essaiJ  = _cfg.dureeEssaiJours;
+
     return StatefulBuilder(
       builder: (ctx, setS) {
         return Container(
@@ -1067,7 +1086,7 @@ class _LandingPageState extends State<LandingPage>
               _sectionHeader(
                 'Transparent et abordable',
                 'Tarification',
-                'Prix basé sur le nombre de stands. 30 jours d\'essai gratuit, sans carte bancaire.',
+                'Prix basé sur le nombre de stands. $essaiJ jours d\'essai gratuit, sans carte bancaire.',
               ),
               const SizedBox(height: 40),
 
@@ -1086,36 +1105,73 @@ class _LandingPageState extends State<LandingPage>
                       setS(() => _periodeAnnuelle = false);
                       setState(() => _periodeAnnuelle = false);
                     }),
-                    _periodeBtn('Annuel  −20%', _periodeAnnuelle, () {
-                      setS(() => _periodeAnnuelle = true);
-                      setState(() => _periodeAnnuelle = true);
-                    }, badge: true),
+                    _periodeBtn(
+                      pct > 0 ? 'Annuel  −$pct%' : 'Annuel',
+                      _periodeAnnuelle,
+                      () {
+                        setS(() => _periodeAnnuelle = true);
+                        setState(() => _periodeAnnuelle = true);
+                      },
+                      badge: pct > 0,
+                    ),
                   ],
                 ),
               ),
               const SizedBox(height: 48),
 
-              // Essai gratuit card
-              _pricingCardEssai(),
-              const SizedBox(height: 32),
+              // Message promo si défini
+              if (_cfg.messagePromo.isNotEmpty) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 24),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.accentOrange.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.accentOrange.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.campaign_rounded,
+                          color: AppTheme.accentOrange, size: 18),
+                      const SizedBox(width: 10),
+                      Flexible(child: Text(_cfg.messagePromo,
+                          style: const TextStyle(
+                              color: AppTheme.textSecondary, fontSize: 13))),
+                    ],
+                  ),
+                ),
+              ],
 
-              // Grille des plans payants
-              isWide
+              // Essai gratuit card (si actif)
+              if (_cfg.essaiActif) ...[
+                _pricingCardEssai(),
+                const SizedBox(height: 32),
+              ],
+
+              // Grille des plans
+              if (!_plansCharges)
+                const CircularProgressIndicator(color: AppTheme.accentOrange)
+              else if (_plans.isEmpty)
+                const Text('Aucun plan disponible',
+                    style: TextStyle(color: AppTheme.textSecondary))
+              else
+                isWide
                   ? Wrap(
                       spacing: 20,
                       runSpacing: 20,
                       alignment: WrapAlignment.center,
-                      children: PlanStands.tous
+                      children: _plans
                           .map((p) => SizedBox(
                               width: 260,
-                              child: _pricingPlanCard(p, _periodeAnnuelle)))
+                              child: _pricingPlanCard(p, _periodeAnnuelle, remise)))
                           .toList(),
                     )
                   : Column(
-                      children: PlanStands.tous
+                      children: _plans
                           .map((p) => Padding(
                                 padding: const EdgeInsets.only(bottom: 16),
-                                child: _pricingPlanCard(p, _periodeAnnuelle),
+                                child: _pricingPlanCard(p, _periodeAnnuelle, remise),
                               ))
                           .toList(),
                     ),
@@ -1270,13 +1326,14 @@ class _LandingPageState extends State<LandingPage>
     );
   }
 
-  Widget _pricingPlanCard(PlanStands plan, bool annuel) {
-    final periode = annuel ? PeriodeAbonnement.annuel : PeriodeAbonnement.mensuel;
-    final prixMensuel = plan.prixMensuelAvecPeriode(periode);
-    final totalAnnuel = plan.totalPeriode(PeriodeAbonnement.annuel);
-    final economie = plan.economieAnnuelle();
-    final color = Color(plan.couleurHex);
-    final isPopular = plan.code == 'duo';
+  Widget _pricingPlanCard(PlanConfig plan, bool annuel, double remise) {
+    final prixMensuel = annuel ? plan.prixMensuelAvecRemise(remise) : plan.prixMensuel;
+    final totalAnnuel = plan.totalPeriode(12, remise);
+    final economie    = plan.economieAnnuelle(remise);
+    final color       = Color(plan.couleurHex);
+    // Le 2e plan actif est "populaire"
+    final plansActifs = _plans;
+    final isPopular   = plansActifs.length >= 2 && plansActifs[1].code == plan.code;
 
     return Container(
       padding: const EdgeInsets.all(22),
@@ -1290,13 +1347,10 @@ class _LandingPageState extends State<LandingPage>
           width: isPopular ? 2 : 1.5,
         ),
         boxShadow: isPopular
-            ? [
-                BoxShadow(
-                  color: AppTheme.accentOrange.withValues(alpha: 0.12),
-                  blurRadius: 20,
-                  spreadRadius: 2,
-                )
-              ]
+            ? [BoxShadow(
+                color: AppTheme.accentOrange.withValues(alpha: 0.12),
+                blurRadius: 20, spreadRadius: 2,
+              )]
             : null,
       ),
       child: Column(
@@ -1305,23 +1359,19 @@ class _LandingPageState extends State<LandingPage>
           if (isPopular)
             Container(
               margin: const EdgeInsets.only(bottom: 12),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 gradient: AppTheme.accentGradient,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Text('POPULAIRE',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
+                  style: TextStyle(color: Colors.white, fontSize: 10,
                       fontWeight: FontWeight.bold)),
             ),
           Row(
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 40, height: 40,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
@@ -1330,10 +1380,8 @@ class _LandingPageState extends State<LandingPage>
               ),
               const SizedBox(width: 10),
               Text(plan.label,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold)),
+                  style: const TextStyle(color: Colors.white,
+                      fontSize: 18, fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 8),
@@ -1349,32 +1397,28 @@ class _LandingPageState extends State<LandingPage>
                 style: TextStyle(
                     color: color, fontSize: 28, fontWeight: FontWeight.w900),
               ),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4, left: 4),
+              const Padding(
+                padding: EdgeInsets.only(bottom: 4, left: 4),
                 child: Text(' F/mois',
-                    style: const TextStyle(
+                    style: TextStyle(
                         color: AppTheme.textSecondary, fontSize: 13)),
               ),
             ],
           ),
-          if (annuel) ...[
+          if (annuel && remise > 0) ...[
             const SizedBox(height: 4),
             Text('${_pricingFmt.format(totalAnnuel)} F/an',
-                style: const TextStyle(
-                    color: AppTheme.textHint, fontSize: 11)),
+                style: const TextStyle(color: AppTheme.textHint, fontSize: 11)),
             const SizedBox(height: 6),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
                 color: AppTheme.success.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
                 'Économie ${_pricingFmt.format(economie)} F/an',
-                style: const TextStyle(
-                    color: AppTheme.success,
-                    fontSize: 10,
+                style: const TextStyle(color: AppTheme.success, fontSize: 10,
                     fontWeight: FontWeight.bold),
               ),
             ),

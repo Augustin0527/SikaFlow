@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/app_provider.dart';
 import '../../models/abonnement_model.dart';
+import '../../models/plan_config_model.dart';
 
 const _bg      = Color(0xFF1E2530);
 const _surface = Color(0xFF252D3A);
@@ -20,22 +21,48 @@ class AbonnementScreen extends StatefulWidget {
 }
 
 class _AbonnementScreenState extends State<AbonnementScreen> {
-  PeriodeAbonnement _periode = PeriodeAbonnement.mensuel;
+  // mensuel = false, annuel = true
+  bool _annuel = false;
   final _fmt = NumberFormat('#,###', 'fr_FR');
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AppProvider>(builder: (ctx, p, _) {
-      final ent = p.entrepriseActive;
-      final nbStands = p.standsActifs.length;
+      final ent         = p.entrepriseActive;
+      final nbStands    = p.standsActifs.length;
+      final plans       = p.plansActifs; // plans actifs depuis Firestore
+      final config      = p.configGlobal;
       final abonnements = p.abonnements;
-      final planRecommande = PlanStands.pourNombreDeStands(nbStands == 0 ? 1 : nbStands);
+      final remise      = config.remiseAnnuelle;
+
+      // Plan recommandé selon le nombre de stands actifs
+      final PlanConfig planRecommande = plans.isNotEmpty
+          ? p.planRecommande(nbStands == 0 ? 1 : nbStands)
+          : PlanConfig.fromMap({'code':'','label':'','min_stands':1,
+              'max_stands':1,'prix_mensuel':0,'description':'',
+              'couleur_hex':0xFF4CAF50});
 
       // Abonnement actif en cours
       final AbonnementModel? aboCurrent = abonnements
           .where((a) => a.estActif)
           .fold<AbonnementModel?>(null, (prev, a) =>
               prev == null || a.dateFin.isAfter(prev.dateFin) ? a : prev);
+
+      if (plans.isEmpty) {
+        return const Scaffold(
+          backgroundColor: _bg,
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(color: _orange),
+                SizedBox(height: 12),
+                Text('Chargement des plans...', style: TextStyle(color: _textS)),
+              ],
+            ),
+          ),
+        );
+      }
 
       return Scaffold(
         backgroundColor: _bg,
@@ -44,37 +71,43 @@ class _AbonnementScreenState extends State<AbonnementScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── En-tête ───────────────────────────────────────────────────
+              // ── En-tête ─────────────────────────────────────────────────
               const Text('Abonnement',
                   style: TextStyle(color: _textP, fontSize: 20,
                       fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
-              Text('Gérez votre abonnement SikaFlow',
-                  style: const TextStyle(color: _textS, fontSize: 13)),
+              const Text('Gérez votre abonnement SikaFlow',
+                  style: TextStyle(color: _textS, fontSize: 13)),
               const SizedBox(height: 20),
 
-              // ── Statut actuel ─────────────────────────────────────────────
+              // ── Message promo ────────────────────────────────────────────
+              if (config.messagePromo.isNotEmpty) ...[
+                _buildPromoMessage(config.messagePromo),
+                const SizedBox(height: 16),
+              ],
+
+              // ── Statut actuel ────────────────────────────────────────────
               _buildStatutActuel(aboCurrent, nbStands, ent?.dateFinEssai),
               const SizedBox(height: 24),
 
-              // ── Nombre de stands actifs ───────────────────────────────────
+              // ── Nombre de stands actifs ──────────────────────────────────
               _buildInfoStands(nbStands, planRecommande),
               const SizedBox(height: 24),
 
-              // ── Toggle mensuel / annuel ───────────────────────────────────
-              _buildTogglePeriode(),
+              // ── Toggle mensuel / annuel ──────────────────────────────────
+              _buildTogglePeriode(remise),
               const SizedBox(height: 20),
 
-              // ── Grille des plans ──────────────────────────────────────────
+              // ── Grille des plans ─────────────────────────────────────────
               const Text('Choisissez votre plan',
                   style: TextStyle(color: _textP, fontSize: 16,
                       fontWeight: FontWeight.bold)),
               const SizedBox(height: 14),
-              ...PlanStands.tous.map((plan) =>
-                  _buildPlanCard(plan, planRecommande, aboCurrent)),
+              ...plans.map((plan) =>
+                  _buildPlanCard(plan, planRecommande, aboCurrent, remise)),
               const SizedBox(height: 24),
 
-              // ── Historique ────────────────────────────────────────────────
+              // ── Historique ───────────────────────────────────────────────
               if (abonnements.isNotEmpty) ...[
                 const Text('Historique',
                     style: TextStyle(color: _textP, fontSize: 16,
@@ -87,6 +120,25 @@ class _AbonnementScreenState extends State<AbonnementScreen> {
         ),
       );
     });
+  }
+
+  // ── Message promo ──────────────────────────────────────────────────────────
+  Widget _buildPromoMessage(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: _orange.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _orange.withValues(alpha: 0.3)),
+      ),
+      child: Row(children: [
+        const Icon(Icons.campaign_rounded, color: _orange, size: 18),
+        const SizedBox(width: 10),
+        Expanded(child: Text(message,
+            style: const TextStyle(color: _textS, fontSize: 13))),
+      ]),
+    );
   }
 
   // ── Statut actuel ──────────────────────────────────────────────────────────
@@ -128,8 +180,8 @@ class _AbonnementScreenState extends State<AbonnementScreen> {
                 const SizedBox(height: 6),
                 Text(
                   enEssai
-                      ? 'Essai gratuit (30 jours)'
-                      : '${abo!.plan.label} – ${abo.periode.label}',
+                      ? 'Essai gratuit'
+                      : '${abo?.plan.label ?? ''} – ${abo?.periode.label ?? ''}',
                   style: const TextStyle(color: Colors.white,
                       fontSize: 18, fontWeight: FontWeight.bold),
                 ),
@@ -140,7 +192,7 @@ class _AbonnementScreenState extends State<AbonnementScreen> {
                       : 'Expiré',
                   style: const TextStyle(color: Colors.white70, fontSize: 13),
                 ),
-                if (!enEssai && abo != null) ...[
+                if (!enEssai) ...[
                   const SizedBox(height: 4),
                   Text(
                     'Expire le ${DateFormat('dd/MM/yyyy').format(abo.dateFin)}',
@@ -169,44 +221,47 @@ class _AbonnementScreenState extends State<AbonnementScreen> {
   }
 
   // ── Info stands ────────────────────────────────────────────────────────────
-  Widget _buildInfoStands(int nbStands, PlanStands recommande) {
+  Widget _buildInfoStands(int nbStands, PlanConfig recommande) {
+    final color = Color(recommande.couleurHex);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: _surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Color(recommande.couleurHex).withValues(alpha: 0.4)),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Row(
         children: [
           Container(
             width: 44, height: 44,
             decoration: BoxDecoration(
-              color: Color(recommande.couleurHex).withValues(alpha: 0.15),
+              color: color.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(Icons.storefront_rounded,
-                color: Color(recommande.couleurHex), size: 22),
+            child: Icon(Icons.storefront_rounded, color: color, size: 22),
           ),
           const SizedBox(width: 14),
           Expanded(child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Vous avez $nbStands stand${nbStands > 1 ? "s" : ""} actif${nbStands > 1 ? "s" : ""}',
-                  style: const TextStyle(color: _textP, fontWeight: FontWeight.bold, fontSize: 14)),
+              Text(
+                'Vous avez $nbStands stand${nbStands > 1 ? "s" : ""} actif${nbStands > 1 ? "s" : ""}',
+                style: const TextStyle(color: _textP,
+                    fontWeight: FontWeight.bold, fontSize: 14),
+              ),
               const SizedBox(height: 2),
               Text('Plan recommandé : ${recommande.label}',
-                  style: TextStyle(color: Color(recommande.couleurHex), fontSize: 13)),
+                  style: TextStyle(color: color, fontSize: 13)),
             ],
           )),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: Color(recommande.couleurHex).withValues(alpha: 0.15),
+              color: color.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(recommande.maxStandsLabel,
-                style: TextStyle(color: Color(recommande.couleurHex),
+                style: TextStyle(color: color,
                     fontSize: 11, fontWeight: FontWeight.bold)),
           ),
         ],
@@ -215,7 +270,8 @@ class _AbonnementScreenState extends State<AbonnementScreen> {
   }
 
   // ── Toggle période ─────────────────────────────────────────────────────────
-  Widget _buildTogglePeriode() {
+  Widget _buildTogglePeriode(double remise) {
+    final pct = (remise * 100).round();
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
@@ -224,40 +280,58 @@ class _AbonnementScreenState extends State<AbonnementScreen> {
         border: Border.all(color: _border),
       ),
       child: Row(
-        children: PeriodeAbonnement.values.map((p) {
-          final selected = _periode == p;
-          return Expanded(
+        children: [
+          Expanded(
             child: GestureDetector(
-              onTap: () => setState(() => _periode = p),
+              onTap: () => setState(() => _annuel = false),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
-                  color: selected ? _orange : Colors.transparent,
+                  color: !_annuel ? _orange : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text('Mensuel',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: !_annuel ? Colors.white : _textS,
+                    fontWeight: FontWeight.bold, fontSize: 14,
+                  )),
+              ),
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _annuel = true),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: _annuel ? _orange : Colors.transparent,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(p.label,
+                    Text('Annuel',
                         style: TextStyle(
-                          color: selected ? Colors.white : _textS,
+                          color: _annuel ? Colors.white : _textS,
                           fontWeight: FontWeight.bold, fontSize: 14,
                         )),
-                    if (p == PeriodeAbonnement.annuel) ...[
+                    if (pct > 0) ...[
                       const SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 7, vertical: 2),
                         decoration: BoxDecoration(
-                          color: selected
+                          color: _annuel
                               ? Colors.white.withValues(alpha: 0.25)
                               : _success.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: Text('-20%',
+                        child: Text('-$pct%',
                             style: TextStyle(
-                              color: selected ? Colors.white : _success,
+                              color: _annuel ? Colors.white : _success,
                               fontSize: 10, fontWeight: FontWeight.bold,
                             )),
                       ),
@@ -266,21 +340,21 @@ class _AbonnementScreenState extends State<AbonnementScreen> {
                 ),
               ),
             ),
-          );
-        }).toList(),
+          ),
+        ],
       ),
     );
   }
 
   // ── Carte d'un plan ────────────────────────────────────────────────────────
-  Widget _buildPlanCard(PlanStands plan, PlanStands recommande,
-      AbonnementModel? aboCurrent) {
+  Widget _buildPlanCard(PlanConfig plan, PlanConfig recommande,
+      AbonnementModel? aboCurrent, double remise) {
     final isRecommande = plan.code == recommande.code;
-    final isCurrent = aboCurrent?.plan.code == plan.code;
-    final color = Color(plan.couleurHex);
-    final prixMensuel = plan.prixMensuelAvecPeriode(_periode);
-    final total = plan.totalPeriode(_periode);
-    final economie = plan.economieAnnuelle();
+    final isCurrent    = aboCurrent?.plan.code == plan.code;
+    final color        = Color(plan.couleurHex);
+    final prixMensuel  = _annuel ? plan.prixMensuelAvecRemise(remise) : plan.prixMensuel;
+    final total        = _annuel ? plan.totalPeriode(12, remise) : plan.prixMensuel;
+    final economie     = plan.economieAnnuelle(remise);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -375,8 +449,9 @@ class _AbonnementScreenState extends State<AbonnementScreen> {
                           const TextSpan(text: ' F',
                               style: TextStyle(color: _textS, fontSize: 13)),
                         ])),
-                        const Text('/mois', style: TextStyle(color: _textS, fontSize: 11)),
-                        if (_periode == PeriodeAbonnement.annuel) ...[
+                        const Text('/mois',
+                            style: TextStyle(color: _textS, fontSize: 11)),
+                        if (_annuel) ...[
                           const SizedBox(height: 2),
                           Text('${_fmt.format(total)} F/an',
                               style: const TextStyle(color: _textS, fontSize: 10)),
@@ -386,7 +461,7 @@ class _AbonnementScreenState extends State<AbonnementScreen> {
                   ],
                 ),
 
-                if (_periode == PeriodeAbonnement.annuel && economie > 0) ...[
+                if (_annuel && economie > 0) ...[
                   const SizedBox(height: 10),
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -394,17 +469,15 @@ class _AbonnementScreenState extends State<AbonnementScreen> {
                     decoration: BoxDecoration(
                       color: _success.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                          color: _success.withValues(alpha: 0.3)),
+                      border: Border.all(color: _success.withValues(alpha: 0.3)),
                     ),
                     child: Row(children: [
-                      const Icon(Icons.savings_rounded,
-                          color: _success, size: 14),
+                      const Icon(Icons.savings_rounded, color: _success, size: 14),
                       const SizedBox(width: 6),
-                      Text(
+                      Expanded(child: Text(
                         'Économie de ${_fmt.format(economie)} FCFA/an par rapport au mensuel',
                         style: const TextStyle(color: _success, fontSize: 11),
-                      ),
+                      )),
                     ]),
                   ),
                 ],
@@ -412,9 +485,7 @@ class _AbonnementScreenState extends State<AbonnementScreen> {
                 const SizedBox(height: 14),
 
                 // Plage de stands
-                _infoRow(
-                  Icons.storefront_rounded,
-                  color,
+                _infoRow(Icons.storefront_rounded, color,
                   plan.maxStands == -1
                       ? '${plan.minStands} stands et plus'
                       : plan.minStands == plan.maxStands
@@ -422,21 +493,19 @@ class _AbonnementScreenState extends State<AbonnementScreen> {
                           : '${plan.minStands} à ${plan.maxStands} stands',
                 ),
                 const SizedBox(height: 6),
-                _infoRow(Icons.people_rounded, color,
-                    'Agents et membres illimités'),
+                _infoRow(Icons.people_rounded, color, 'Agents et membres illimités'),
                 const SizedBox(height: 6),
                 _infoRow(Icons.bar_chart_rounded, color,
                     'Rapports et statistiques complets'),
 
                 const SizedBox(height: 16),
 
-                // Bouton
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: isCurrent
                         ? null
-                        : () => _showConfirmationSouscription(plan),
+                        : () => _showConfirmationSouscription(plan, remise),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: isCurrent
                           ? _border
@@ -471,13 +540,14 @@ class _AbonnementScreenState extends State<AbonnementScreen> {
     return Row(children: [
       Icon(icon, color: color, size: 14),
       const SizedBox(width: 8),
-      Text(text, style: const TextStyle(color: _textS, fontSize: 12)),
+      Expanded(child: Text(text,
+          style: const TextStyle(color: _textS, fontSize: 12))),
     ]);
   }
 
   // ── Historique ─────────────────────────────────────────────────────────────
   Widget _buildHistoriqueItem(AbonnementModel abo) {
-    final color = Color(abo.plan.couleurHex);
+    final color  = Color(abo.plan.couleurHex);
     final isActif = abo.estActif;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -546,9 +616,12 @@ class _AbonnementScreenState extends State<AbonnementScreen> {
   }
 
   // ── Dialogue confirmation ──────────────────────────────────────────────────
-  void _showConfirmationSouscription(PlanStands plan) {
-    final total = plan.totalPeriode(_periode);
-    final fmt = _fmt;
+  void _showConfirmationSouscription(PlanConfig plan, double remise) {
+    final prixMensuel = _annuel ? plan.prixMensuelAvecRemise(remise) : plan.prixMensuel;
+    final total       = _annuel ? plan.totalPeriode(12, remise) : plan.prixMensuel;
+    final economie    = plan.economieAnnuelle(remise);
+    final periodeLabel = _annuel ? 'Annuel' : 'Mensuel';
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -569,16 +642,15 @@ class _AbonnementScreenState extends State<AbonnementScreen> {
             Text(plan.description,
                 style: const TextStyle(color: _textS, fontSize: 13)),
             const SizedBox(height: 16),
-            _dialogRow('Période', _periode.label),
+            _dialogRow('Période', periodeLabel),
             _dialogRow('Stands inclus', plan.maxStandsLabel),
-            _dialogRow('Prix/mois',
-                '${fmt.format(plan.prixMensuelAvecPeriode(_periode))} FCFA'),
-            if (_periode == PeriodeAbonnement.annuel)
-              _dialogRow('Total annuel', '${fmt.format(total)} FCFA'),
+            _dialogRow('Prix/mois', '${_fmt.format(prixMensuel)} FCFA'),
+            if (_annuel)
+              _dialogRow('Total annuel', '${_fmt.format(total)} FCFA'),
             _dialogRow('Économie',
-                _periode == PeriodeAbonnement.annuel
-                    ? '${fmt.format(plan.economieAnnuelle())} FCFA/an'
-                    : 'Optez pour l\'annuel pour économiser 20%'),
+                _annuel && economie > 0
+                    ? '${_fmt.format(economie)} FCFA/an'
+                    : 'Optez pour l\'annuel pour économiser ${(remise * 100).round()}%'),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
@@ -589,8 +661,7 @@ class _AbonnementScreenState extends State<AbonnementScreen> {
               ),
               child: const Text(
                 'Le paiement sera traité via FedaPay. '
-                'Vous pouvez payer par mobile money (MTN, Moov) '
-                'ou par carte.',
+                'Vous pouvez payer par mobile money (MTN, Moov) ou par carte.',
                 style: TextStyle(color: _textS, fontSize: 12),
               ),
             ),
@@ -599,13 +670,12 @@ class _AbonnementScreenState extends State<AbonnementScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Annuler',
-                style: TextStyle(color: _textS)),
+            child: const Text('Annuler', style: TextStyle(color: _textS)),
           ),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              _lancerPaiement(plan);
+              _lancerPaiement(plan, total);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Color(plan.couleurHex),
@@ -613,7 +683,7 @@ class _AbonnementScreenState extends State<AbonnementScreen> {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
             ),
-            child: Text('Payer ${fmt.format(total)} FCFA'),
+            child: Text('Payer ${_fmt.format(total)} FCFA'),
           ),
         ],
       ),
@@ -627,24 +697,21 @@ class _AbonnementScreenState extends State<AbonnementScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: const TextStyle(color: _textS, fontSize: 13)),
-          Text(value,
-              style: const TextStyle(color: _textP,
-                  fontWeight: FontWeight.bold, fontSize: 13)),
+          Text(value, style: const TextStyle(color: _textP,
+              fontWeight: FontWeight.bold, fontSize: 13)),
         ],
       ),
     );
   }
 
-  void _lancerPaiement(PlanStands plan) {
+  void _lancerPaiement(PlanConfig plan, int total) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          'Redirection vers FedaPay pour le plan ${plan.label}…',
-        ),
+        content: Text('Redirection vers FedaPay pour le plan ${plan.label}…'),
         backgroundColor: Color(plan.couleurHex),
         duration: const Duration(seconds: 3),
       ),
     );
-    // TODO: intégrer FedaPay avec le vrai service de paiement
+    // TODO: intégrer FedaPay
   }
 }

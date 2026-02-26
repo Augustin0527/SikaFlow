@@ -5,6 +5,7 @@ import '../../services/firestore_service.dart';
 import '../../theme/app_theme.dart';
 import 'admin_entreprise_detail.dart';
 import 'admin_abonnement_screen.dart';
+import 'admin_plans_config_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -23,7 +24,7 @@ class _AdminDashboardState extends State<AdminDashboard>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _chargerStats());
   }
 
@@ -77,6 +78,7 @@ class _AdminDashboardState extends State<AdminDashboard>
             Tab(icon: Icon(Icons.dashboard, size: 18), text: 'Dashboard'),
             Tab(icon: Icon(Icons.business, size: 18), text: 'Entreprises'),
             Tab(icon: Icon(Icons.payment, size: 18), text: 'Abonnements'),
+            Tab(icon: Icon(Icons.settings_rounded, size: 18), text: 'Plans'),
           ],
         ),
       ),
@@ -86,6 +88,7 @@ class _AdminDashboardState extends State<AdminDashboard>
           _buildDashboard(),
           _buildEntreprises(),
           _buildAbonnements(),
+          const AdminPlansConfigScreen(),
         ],
       ),
     );
@@ -154,6 +157,14 @@ class _AdminDashboardState extends State<AdminDashboard>
             sousTitre: 'Bloquer l\'accès temporairement',
             couleur: Colors.red,
             onTap: () => _tabController.animateTo(1),
+          ),
+          const SizedBox(height: 8),
+          _actionRapide(
+            icon: Icons.settings_rounded,
+            titre: 'Configurer les plans',
+            sousTitre: 'Modifier prix, stands, remise annuelle...',
+            couleur: Colors.purple,
+            onTap: () => _tabController.animateTo(3),
           ),
         ]),
       ),
