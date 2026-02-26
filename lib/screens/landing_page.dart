@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
+import '../models/abonnement_model.dart';
 import 'auth/login_screen.dart';
 import 'auth/inscription_screen.dart';
 
@@ -18,6 +20,8 @@ class _LandingPageState extends State<LandingPage>
   late Animation<double> _heroFade;
   late Animation<Offset> _heroSlide;
   final ScrollController _scrollController = ScrollController();
+  bool _periodeAnnuelle = false;
+  final _pricingFmt = NumberFormat('#,###', 'fr_FR');
 
   @override
   void initState() {
@@ -1050,90 +1054,163 @@ class _LandingPageState extends State<LandingPage>
   // ════════════════════════════════════════════════════════════════════════════
   // PRICING SECTION
   // ════════════════════════════════════════════════════════════════════════════
+
   Widget _buildPricingSection(bool isWide) {
-    return Container(
-      color: AppTheme.cardDarker,
-      padding: EdgeInsets.symmetric(
-          horizontal: isWide ? 80 : 24, vertical: 80),
-      child: Column(
-        children: [
-          _sectionHeader(
-            'Transparent et abordable',
-            'Tarification',
-            'Un prix simple, sans frais cachés. Commencez gratuitement, payez seulement quand vous en avez besoin.',
-          ),
-          const SizedBox(height: 56),
-          isWide
-              ? Row(
+    return StatefulBuilder(
+      builder: (ctx, setS) {
+        return Container(
+          color: AppTheme.cardDarker,
+          padding: EdgeInsets.symmetric(
+              horizontal: isWide ? 80 : 24, vertical: 80),
+          child: Column(
+            children: [
+              _sectionHeader(
+                'Transparent et abordable',
+                'Tarification',
+                'Prix basé sur le nombre de stands. 30 jours d\'essai gratuit, sans carte bancaire.',
+              ),
+              const SizedBox(height: 40),
+
+              // Toggle mensuel / annuel
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: AppTheme.cardDark,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppTheme.divider),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _periodeBtn('Mensuel', !_periodeAnnuelle, () {
+                      setS(() => _periodeAnnuelle = false);
+                      setState(() => _periodeAnnuelle = false);
+                    }),
+                    _periodeBtn('Annuel  −20%', _periodeAnnuelle, () {
+                      setS(() => _periodeAnnuelle = true);
+                      setState(() => _periodeAnnuelle = true);
+                    }, badge: true),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 48),
+
+              // Essai gratuit card
+              _pricingCardEssai(),
+              const SizedBox(height: 32),
+
+              // Grille des plans payants
+              isWide
+                  ? Wrap(
+                      spacing: 20,
+                      runSpacing: 20,
+                      alignment: WrapAlignment.center,
+                      children: PlanStands.tous
+                          .map((p) => SizedBox(
+                              width: 260,
+                              child: _pricingPlanCard(p, _periodeAnnuelle)))
+                          .toList(),
+                    )
+                  : Column(
+                      children: PlanStands.tous
+                          .map((p) => Padding(
+                                padding: const EdgeInsets.only(bottom: 16),
+                                child: _pricingPlanCard(p, _periodeAnnuelle),
+                              ))
+                          .toList(),
+                    ),
+
+              const SizedBox(height: 32),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppTheme.success.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                      color: AppTheme.success.withValues(alpha: 0.3)),
+                ),
+                child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    SizedBox(width: 340, child: _pricingCardEssai()),
-                    const SizedBox(width: 24),
-                    SizedBox(width: 340, child: _pricingCardPro()),
-                  ],
-                )
-              : Column(
-                  children: [
-                    _pricingCardEssai(),
-                    const SizedBox(height: 20),
-                    _pricingCardPro(),
+                    Icon(Icons.payment_rounded,
+                        color: AppTheme.success, size: 18),
+                    SizedBox(width: 10),
+                    Flexible(
+                      child: Text(
+                        'Paiement via MTN MoMo, Moov Money ou carte bancaire',
+                        style: TextStyle(color: AppTheme.success, fontSize: 13),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                   ],
                 ),
-          const SizedBox(height: 32),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppTheme.success.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                  color: AppTheme.success.withValues(alpha: 0.3)),
-            ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.info_outline,
-                    color: AppTheme.success, size: 18),
-                SizedBox(width: 10),
-                Flexible(
-                  child: Text(
-                    'Paiement par Mobile Money (MTN MoMo, Moov Money) ou manuellement via l\'admin',
-                    style: TextStyle(
-                        color: AppTheme.success,
-                        fontSize: 13),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        );
+      },
+    );
+  }
+
+  Widget _periodeBtn(String label, bool selected, VoidCallback onTap,
+      {bool badge = false}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? AppTheme.accentOrange : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.white : AppTheme.textSecondary,
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
       ),
     );
   }
 
   Widget _pricingCardEssai() {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
         color: AppTheme.cardDark,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppTheme.divider),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.success.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-            decoration: BoxDecoration(
-              color: AppTheme.success.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Text('GRATUIT',
-                style: TextStyle(
-                    color: AppTheme.success,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 11)),
+          Row(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppTheme.success.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text('GRATUIT',
+                    style: TextStyle(
+                        color: AppTheme.success,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11)),
+              ),
+              const Spacer(),
+              const Icon(Icons.timer_outlined,
+                  color: AppTheme.textHint, size: 18),
+              const SizedBox(width: 6),
+              const Text('30 jours',
+                  style:
+                      TextStyle(color: AppTheme.textHint, fontSize: 13)),
+            ],
           ),
           const SizedBox(height: 16),
           const Text('Période d\'essai',
@@ -1141,63 +1218,191 @@ class _LandingPageState extends State<LandingPage>
                   color: Colors.white,
                   fontSize: 22,
                   fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          const Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          const SizedBox(height: 6),
+          const Text(
+            'Toutes les fonctionnalités incluses. Aucune carte bancaire requise.',
+            style: TextStyle(
+                color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
+          ),
+          const SizedBox(height: 20),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
             children: [
-              Text('0',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 48,
-                      fontWeight: FontWeight.w900)),
-              Padding(
-                padding: EdgeInsets.only(bottom: 10, left: 4),
-                child: Text('FCFA / 30 jours',
-                    style: TextStyle(
-                        color: AppTheme.textSecondary, fontSize: 14)),
-              ),
+              _essaiBadge(Icons.check_circle_outline, 'Agents illimités'),
+              _essaiBadge(Icons.check_circle_outline, 'Opérations illimitées'),
+              _essaiBadge(Icons.check_circle_outline, 'Sync temps réel'),
+              _essaiBadge(Icons.check_circle_outline, 'Tous les rôles'),
             ],
           ),
-          const Divider(color: AppTheme.divider, height: 32),
-          ...[
-            'Accès complet à toutes les fonctionnalités',
-            'Nombre illimité d\'opérations',
-            'Tous les rôles (Agent, Contrôleur, Gestionnaire)',
-            'Synchronisation temps réel',
-            'Support par email',
-          ].map((item) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Row(
-                  children: [
-                    const Icon(Icons.check_circle,
-                        color: AppTheme.success, size: 16),
-                    const SizedBox(width: 10),
-                    Expanded(
-                        child: Text(item,
-                            style: const TextStyle(
-                                color: AppTheme.textSecondary,
-                                fontSize: 13))),
-                  ],
-                ),
-              )),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
-            child: OutlinedButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const InscriptionScreen()),
-              ),
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const InscriptionScreen())),
+              icon: const Icon(Icons.rocket_launch_rounded, size: 18),
+              label: const Text('Commencer gratuitement'),
               style: OutlinedButton.styleFrom(
-                side:
-                    const BorderSide(color: AppTheme.success, width: 1.5),
+                side: const BorderSide(color: AppTheme.success, width: 1.5),
                 foregroundColor: AppTheme.success,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('Commencer l\'essai gratuit',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _essaiBadge(IconData icon, String text) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: AppTheme.success, size: 14),
+        const SizedBox(width: 6),
+        Text(text,
+            style: const TextStyle(
+                color: AppTheme.textSecondary, fontSize: 12)),
+      ],
+    );
+  }
+
+  Widget _pricingPlanCard(PlanStands plan, bool annuel) {
+    final periode = annuel ? PeriodeAbonnement.annuel : PeriodeAbonnement.mensuel;
+    final prixMensuel = plan.prixMensuelAvecPeriode(periode);
+    final totalAnnuel = plan.totalPeriode(PeriodeAbonnement.annuel);
+    final economie = plan.economieAnnuelle();
+    final color = Color(plan.couleurHex);
+    final isPopular = plan.code == 'duo';
+
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: AppTheme.cardDark,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isPopular
+              ? AppTheme.accentOrange.withValues(alpha: 0.6)
+              : color.withValues(alpha: 0.35),
+          width: isPopular ? 2 : 1.5,
+        ),
+        boxShadow: isPopular
+            ? [
+                BoxShadow(
+                  color: AppTheme.accentOrange.withValues(alpha: 0.12),
+                  blurRadius: 20,
+                  spreadRadius: 2,
+                )
+              ]
+            : null,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (isPopular)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                gradient: AppTheme.accentGradient,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text('POPULAIRE',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold)),
+            ),
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.storefront_rounded, color: color, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Text(plan.label,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(plan.description,
+              style: const TextStyle(
+                  color: AppTheme.textSecondary, fontSize: 12, height: 1.4)),
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                _pricingFmt.format(prixMensuel),
+                style: TextStyle(
+                    color: color, fontSize: 28, fontWeight: FontWeight.w900),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4, left: 4),
+                child: Text(' F/mois',
+                    style: const TextStyle(
+                        color: AppTheme.textSecondary, fontSize: 13)),
+              ),
+            ],
+          ),
+          if (annuel) ...[
+            const SizedBox(height: 4),
+            Text('${_pricingFmt.format(totalAnnuel)} F/an',
+                style: const TextStyle(
+                    color: AppTheme.textHint, fontSize: 11)),
+            const SizedBox(height: 6),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppTheme.success.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                'Économie ${_pricingFmt.format(economie)} F/an',
+                style: const TextStyle(
+                    color: AppTheme.success,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          const Divider(color: AppTheme.divider, height: 1),
+          const SizedBox(height: 12),
+          _planFeature(color, plan.maxStandsLabel),
+          const SizedBox(height: 6),
+          _planFeature(color, 'Agents & membres illimités'),
+          const SizedBox(height: 6),
+          _planFeature(color, 'Opérations illimitées'),
+          const SizedBox(height: 6),
+          _planFeature(color, 'Rapports complets'),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const InscriptionScreen())),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isPopular ? AppTheme.accentOrange : color,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text('Commencer',
                   style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ),
@@ -1206,132 +1411,16 @@ class _LandingPageState extends State<LandingPage>
     );
   }
 
-  Widget _pricingCardPro() {
-    return Container(
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppTheme.primaryNavy, Color(0xFF1A3A5C)],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-            color: AppTheme.accentOrange.withValues(alpha: 0.5), width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.accentOrange.withValues(alpha: 0.15),
-            blurRadius: 30,
-            spreadRadius: 5,
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 5),
-                decoration: BoxDecoration(
-                  gradient: AppTheme.accentGradient,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Text('RECOMMANDÉ',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Text('Plan Professionnel',
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          const Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text('5 000',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 48,
-                      fontWeight: FontWeight.w900)),
-              Padding(
-                padding: EdgeInsets.only(bottom: 10, left: 4),
-                child: Text('FCFA / 6 mois',
-                    style: TextStyle(
-                        color: AppTheme.textSecondary, fontSize: 14)),
-              ),
-            ],
-          ),
-          Container(
-            margin: const EdgeInsets.only(top: 4, bottom: 16),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppTheme.accentOrange.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: const Text('≈ 833 FCFA/mois',
-                style: TextStyle(
-                    color: AppTheme.accentOrange,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600)),
-          ),
-          const Divider(color: AppTheme.divider, height: 24),
-          ...[
-            'Tout l\'essai gratuit +',
-            'Accès illimité sur 6 mois',
-            'Multi-agents sans limite',
-            'Rapports PDF et Excel',
-            'Alertes et notifications',
-            'Support prioritaire',
-          ].map((item) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Row(
-                  children: [
-                    const Icon(Icons.check_circle,
-                        color: AppTheme.accentOrange, size: 16),
-                    const SizedBox(width: 10),
-                    Expanded(
-                        child: Text(item,
-                            style: const TextStyle(
-                                color: AppTheme.textSecondary,
-                                fontSize: 13))),
-                  ],
-                ),
-              )),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const InscriptionScreen()),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.accentOrange,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                elevation: 4,
-                shadowColor:
-                    AppTheme.accentOrange.withValues(alpha: 0.4),
-              ),
-              child: const Text('Choisir ce plan',
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 16)),
-            ),
-          ),
-        ],
-      ),
+  Widget _planFeature(Color color, String text) {
+    return Row(
+      children: [
+        Icon(Icons.check_circle_rounded, color: color, size: 14),
+        const SizedBox(width: 8),
+        Expanded(
+            child: Text(text,
+                style: const TextStyle(
+                    color: AppTheme.textSecondary, fontSize: 12))),
+      ],
     );
   }
 

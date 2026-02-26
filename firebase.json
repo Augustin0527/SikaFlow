@@ -17,11 +17,11 @@
     ],
     "headers": [
       {
-        "source": "**/*.@(js|css)",
+        "source": "**/*.@(js|css|wasm)",
         "headers": [
           {
             "key": "Cache-Control",
-            "value": "max-age=604800"
+            "value": "max-age=3600"
           }
         ]
       },
@@ -29,15 +29,28 @@
         "source": "**",
         "headers": [
           {
-            "key": "X-Frame-Options",
-            "value": "ALLOWALL"
+            "key": "Cross-Origin-Opener-Policy",
+            "value": "same-origin"
+          },
+          {
+            "key": "Cross-Origin-Embedder-Policy",
+            "value": "require-corp"
+          },
+          {
+            "key": "Cross-Origin-Resource-Policy",
+            "value": "cross-origin"
           },
           {
             "key": "Access-Control-Allow-Origin",
             "value": "*"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "ALLOWALL"
           }
         ]
       }
-    ]
+    ],
+    "site": "sikaflow-c8869"
   }
 }

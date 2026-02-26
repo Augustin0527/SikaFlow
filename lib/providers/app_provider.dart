@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -61,23 +62,37 @@ class AppProvider extends ChangeNotifier {
   Future<void> initialiser() async {
     _setChargement(true);
 
-    Future.delayed(const Duration(seconds: 8), () {
-      if (_chargement) {
-        _chargement = false;
-        notifyListeners();
-      }
-    });
-
     try {
-      _auth.authStateChanges().listen((User? firebaseUser) async {
-        if (firebaseUser == null) {
-          _viderEtat();
-        } else {
-          await _chargerProfilFirebase(firebaseUser.uid);
-        }
+      // Attendre le premier événement Firebase Auth (max 4 secondes)
+      final completer = Completer<User?>();
+
+      final sub = _auth.authStateChanges().listen((user) {
+        if (!completer.isCompleted) completer.complete(user);
+      }, onError: (e) {
+        if (!completer.isCompleted) completer.complete(null);
       });
+
+      // Timeout 4 secondes
+      final firebaseUser = await completer.future
+          .timeout(const Duration(seconds: 4), onTimeout: () => null);
+
+      await sub.cancel();
+
+      if (firebaseUser == null) {
+        _viderEtat();
+      } else {
+        await _chargerProfilFirebase(firebaseUser.uid);
+        // Continuer à écouter les changements d'auth
+        _auth.authStateChanges().listen((User? u) async {
+          if (u == null) {
+            _viderEtat();
+          } else if (u.uid != _utilisateurConnecte?.id) {
+            await _chargerProfilFirebase(u.uid);
+          }
+        });
+      }
     } catch (e) {
-      debugPrint('authStateChanges error: $e');
+      debugPrint('initialiser error: $e');
       _chargement = false;
       notifyListeners();
     }

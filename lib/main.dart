@@ -16,7 +16,6 @@ import 'screens/admin/admin_dashboard.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ── Initialisation Firebase ──────────────────────────────────────────────
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -53,41 +52,28 @@ class AppRouter extends StatefulWidget {
 }
 
 class _AppRouterState extends State<AppRouter> {
-  bool _forceShow = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // Sécurité : forcer l'affichage après 10 secondes max
-    Future.delayed(const Duration(seconds: 10), () {
-      if (mounted && !_forceShow) {
-        setState(() => _forceShow = true);
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return Consumer<AppProvider>(
       builder: (ctx, provider, _) {
-        // Chargement initial (max 10s via _forceShow)
-        if (provider.chargement && !provider.estConnecte && !_forceShow) {
-          return const SplashScreen();
+        // Splash de chargement
+        if (provider.chargement) {
+          return _SplashScreen();
         }
 
-        // Pas connecté → afficher la landing page
+        // Non connecté → LandingPage
         if (!provider.estConnecte) {
           return const LandingPage();
         }
 
         final user = provider.utilisateurConnecte!;
 
-        // Mot de passe provisoire → obliger le changement
+        // Mot de passe provisoire
         if (user.motDePasseProvisoire) {
           return const ChangerMotDePasseScreen(obligatoire: true);
         }
 
-        // ── Routage par rôle ─────────────────────────────────────────────
+        // Routage par rôle
         switch (user.role) {
           case 'super_admin':
             return const AdminDashboard();
@@ -105,69 +91,118 @@ class _AppRouterState extends State<AppRouter> {
   }
 }
 
-class SplashScreen extends StatelessWidget {
-  const SplashScreen({super.key});
+class _SplashScreen extends StatefulWidget {
+  @override
+  State<_SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<_SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _fade;
+  late Animation<double> _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+
+    _fade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _ctrl,
+        curve: const Interval(0.0, 0.5, curve: Curves.easeIn),
+      ),
+    );
+    _pulse = Tween<double>(begin: 0.95, end: 1.05).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.backgroundDark,
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Logo SikaFlow
-            Container(
-              width: 110,
-              height: 110,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.accentOrange.withValues(alpha: 0.4),
-                    blurRadius: 30,
-                    offset: const Offset(0, 10),
+        child: AnimatedBuilder(
+          animation: _ctrl,
+          builder: (_, __) => Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Transform.scale(
+                scale: _pulse.value,
+                child: Container(
+                  width: 88,
+                  height: 88,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(22),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.accentOrange
+                            .withValues(alpha: 0.35 + 0.15 * _ctrl.value),
+                        blurRadius: 24,
+                        spreadRadius: 4,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(28),
-                child: Image.asset(
-                  'assets/icon/app_icon.png',
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const Icon(
-                    Icons.account_balance_wallet,
-                    color: AppTheme.accentOrange,
-                    size: 50,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: Image.asset(
+                      'assets/icon/app_icon.png',
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.account_balance_wallet,
+                        color: AppTheme.accentOrange,
+                        size: 44,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'SikaFlow',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.5,
+              const SizedBox(height: 24),
+              const Text(
+                'SikaFlow',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.0,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Système de gestion des opérations Mobile Money',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-            ),
-            const SizedBox(height: 48),
-            const SizedBox(
-              width: 40,
-              height: 40,
-              child: CircularProgressIndicator(
-                  color: AppTheme.accentOrange, strokeWidth: 3),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Opacity(
+                opacity: _fade.value,
+                child: const Text(
+                  'Gestion Mobile Money',
+                  style: TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 14,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 40),
+              SizedBox(
+                width: 36,
+                height: 36,
+                child: CircularProgressIndicator(
+                  color: AppTheme.accentOrange,
+                  strokeWidth: 3,
+                  value: null,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
