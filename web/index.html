@@ -69,6 +69,29 @@
   </div>
 
   <script>
+    // ── Purge service worker + cache (version v3 — forcé à chaque chargement) ──
+    var SW_VERSION = 'v3';
+    var swPurged = sessionStorage.getItem('sw_purged');
+    if (swPurged !== SW_VERSION && 'serviceWorker' in navigator) {
+      // Marquer AVANT pour ne pas boucler en cas d'erreur
+      sessionStorage.setItem('sw_purged', SW_VERSION);
+      Promise.all([
+        // Dé-enregistrer tous les service workers
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+          return Promise.all(regs.map(function(r) { return r.unregister(); }));
+        }),
+        // Vider tous les caches
+        window.caches ? caches.keys().then(function(keys) {
+          return Promise.all(keys.map(function(k) { return caches.delete(k); }));
+        }) : Promise.resolve()
+      ]).then(function() {
+        // Recharger UNE SEULE FOIS avec cache busting
+        window.location.replace(window.location.href.split('?')[0] + '?r=' + Date.now());
+      }).catch(function() {
+        // En cas d'erreur, continuer quand même
+      });
+    }
+
     window.addEventListener('flutter-first-frame', function() {
       var loading = document.getElementById('loading');
       if (loading) {
