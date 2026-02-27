@@ -47,25 +47,18 @@ class _LandingPageState extends State<LandingPage>
     Future.delayed(const Duration(milliseconds: 400), () {
       if (mounted) _featuresController.forward();
     });
-    // Charger les plans directement depuis le serveur Firestore
+    // Charger les plans dynamiques depuis Firestore
     _chargerPlans();
   }
 
   Future<void> _chargerPlans() async {
-    try {
-      // Source.server : lecture directe Firestore, jamais depuis le cache
-      final plans = await ConfigAbonnementService.chargerPlans();
-      final cfg   = await ConfigAbonnementService.chargerGlobal();
-      if (!mounted) return;
-      setState(() {
-        _plans        = plans.where((p) => p.actif).toList();
-        _cfg          = cfg;
-        _plansCharges = true;
-      });
-    } catch (e) {
-      debugPrint('[LandingPage] _chargerPlans ERROR: $e');
-      if (mounted) setState(() => _plansCharges = true);
-    }
+    final plans = await ConfigAbonnementService.chargerPlans();
+    final cfg   = await ConfigAbonnementService.chargerGlobal();
+    if (mounted) setState(() {
+      _plans        = plans.where((p) => p.actif).toList();
+      _cfg          = cfg;
+      _plansCharges = true;
+    });
   }
 
   @override
@@ -378,7 +371,7 @@ class _LandingPageState extends State<LandingPage>
         const SizedBox(height: 32),
         Row(
           children: [
-            _heroBadge(Icons.shield_outlined, '${_cfg.dureeEssaiJours} jours gratuits'),
+            _heroBadge(Icons.shield_outlined, '1 mois gratuit'),
             const SizedBox(width: 24),
             _heroBadge(Icons.sync, 'Sync temps réel'),
             const SizedBox(width: 24),
@@ -643,7 +636,7 @@ class _LandingPageState extends State<LandingPage>
         children: [
           _statItem('3', 'Opérateurs couverts'),
           _dividerStat(),
-          _statItem('${_cfg.dureeEssaiJours} jours', 'Essai gratuit'),
+          _statItem('30 jours', 'Essai gratuit'),
           _dividerStat(),
           _statItem('100%', 'Données privées'),
           _dividerStat(),
@@ -1082,7 +1075,9 @@ class _LandingPageState extends State<LandingPage>
     final pct     = (remise * 100).round();
     final essaiJ  = _cfg.dureeEssaiJours;
 
-    return Container(
+    return StatefulBuilder(
+      builder: (ctx, setS) {
+        return Container(
           color: AppTheme.cardDarker,
           padding: EdgeInsets.symmetric(
               horizontal: isWide ? 80 : 24, vertical: 80),
@@ -1107,12 +1102,14 @@ class _LandingPageState extends State<LandingPage>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     _periodeBtn('Mensuel', !_periodeAnnuelle, () {
+                      setS(() => _periodeAnnuelle = false);
                       setState(() => _periodeAnnuelle = false);
                     }),
                     _periodeBtn(
                       pct > 0 ? 'Annuel  −$pct%' : 'Annuel',
                       _periodeAnnuelle,
                       () {
+                        setS(() => _periodeAnnuelle = true);
                         setState(() => _periodeAnnuelle = true);
                       },
                       badge: pct > 0,
@@ -1154,25 +1151,10 @@ class _LandingPageState extends State<LandingPage>
 
               // Grille des plans
               if (!_plansCharges)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 40),
-                  child: CircularProgressIndicator(color: AppTheme.accentOrange),
-                )
+                const CircularProgressIndicator(color: AppTheme.accentOrange)
               else if (_plans.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 32),
-                  child: Column(children: [
-                    const Icon(Icons.hourglass_empty, color: AppTheme.textHint, size: 40),
-                    const SizedBox(height: 12),
-                    const Text('Plans en cours de configuration…',
-                        style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: _chargerPlans,
-                      child: const Text('Réessayer', style: TextStyle(color: AppTheme.accentOrange)),
-                    ),
-                  ]),
-                )
+                const Text('Aucun plan disponible',
+                    style: TextStyle(color: AppTheme.textSecondary))
               else
                 isWide
                   ? Wrap(
@@ -1223,6 +1205,8 @@ class _LandingPageState extends State<LandingPage>
             ],
           ),
         );
+      },
+    );
   }
 
   Widget _periodeBtn(String label, bool selected, VoidCallback onTap,
@@ -1279,9 +1263,9 @@ class _LandingPageState extends State<LandingPage>
               const Icon(Icons.timer_outlined,
                   color: AppTheme.textHint, size: 18),
               const SizedBox(width: 6),
-              Text('${_cfg.dureeEssaiJours} jours',
+              const Text('30 jours',
                   style:
-                      const TextStyle(color: AppTheme.textHint, fontSize: 13)),
+                      TextStyle(color: AppTheme.textHint, fontSize: 13)),
             ],
           ),
           const SizedBox(height: 16),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 
@@ -16,16 +17,19 @@ import 'screens/admin/admin_dashboard.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Initialiser Firebase — simple et direct
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    if (kDebugMode) debugPrint('[SikaFlow] Firebase initialisé');
   } on FirebaseException catch (e) {
+    // App déjà initialisée (hot-reload)
     if (e.code != 'duplicate-app') {
-      debugPrint('[SikaFlow] FirebaseException: ${e.code}');
+      if (kDebugMode) debugPrint('[SikaFlow] FirebaseException: ${e.code} - ${e.message}');
     }
   } catch (e) {
-    debugPrint('[SikaFlow] Firebase erreur: $e');
+    if (kDebugMode) debugPrint('[SikaFlow] Firebase erreur: $e');
   }
 
   runApp(const SikaFlowApp());
@@ -117,17 +121,6 @@ class _SplashScreenState extends State<_SplashScreen>
     _pulse = Tween<double>(begin: 0.96, end: 1.04).animate(
       CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
     );
-
-    // Double sécurité UI : forcer fin chargement après 8s max
-    Future.delayed(const Duration(seconds: 8), () {
-      if (mounted) {
-        final provider = context.read<AppProvider>();
-        if (provider.chargement) {
-          debugPrint('[SplashScreen] ⏰ Timeout UI 8s — forcer fin chargement');
-          provider.forcerFinChargement();
-        }
-      }
-    });
   }
 
   @override
