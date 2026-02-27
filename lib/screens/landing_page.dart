@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
@@ -27,10 +26,6 @@ class _LandingPageState extends State<LandingPage>
   ConfigAbonnementGlobal  _cfg    = const ConfigAbonnementGlobal();
   bool _plansCharges = false;
 
-  // Streams Firestore pour mises à jour en temps réel
-  StreamSubscription<List<PlanConfig>>?        _plansStreamSub;
-  StreamSubscription<ConfigAbonnementGlobal>?  _cfgStreamSub;
-
   @override
   void initState() {
     super.initState();
@@ -52,56 +47,21 @@ class _LandingPageState extends State<LandingPage>
     Future.delayed(const Duration(milliseconds: 400), () {
       if (mounted) _featuresController.forward();
     });
-    // Écouter les plans et la config en temps réel via Firestore streams
-    _ecouterFirestore();
-  }
-
-  void _ecouterFirestore() {
-    // ── Plans ────────────────────────────────────────────────────────────────
-    // On s'abonne au stream Firestore (temps réel).
-    // Avec persistenceEnabled:false (voir main.dart), chaque événement vient
-    // directement du serveur — plus de cache périmé.
-    _plansStreamSub = ConfigAbonnementService.plansStream().listen(
-      (plans) {
-        if (!mounted) return;
-        setState(() {
-          _plans        = plans.where((p) => p.actif).toList();
-          _plansCharges = true;
-        });
-        debugPrint('[LandingPage] plans reçus du stream: ${_plans.length} actifs');
-      },
-      onError: (e) {
-        debugPrint('[LandingPage] plansStream error: $e — fallback HTTP');
-        if (mounted) setState(() => _plansCharges = true);
-        // Fallback lecture directe
-        _chargerPlans();
-      },
-    );
-
-    // ── Config globale ────────────────────────────────────────────────────────
-    _cfgStreamSub = ConfigAbonnementService.globalStream().listen(
-      (cfg) {
-        if (mounted) setState(() => _cfg = cfg);
-      },
-      onError: (e) {
-        debugPrint('[LandingPage] globalStream error: $e');
-      },
-    );
+    // Charger les plans directement depuis le serveur Firestore
+    _chargerPlans();
   }
 
   Future<void> _chargerPlans() async {
     try {
+      // Source.server : lecture directe Firestore, jamais depuis le cache
       final plans = await ConfigAbonnementService.chargerPlans();
       final cfg   = await ConfigAbonnementService.chargerGlobal();
       if (!mounted) return;
       setState(() {
-        if (plans.isNotEmpty) {
-          _plans = plans.where((p) => p.actif).toList();
-        }
+        _plans        = plans.where((p) => p.actif).toList();
         _cfg          = cfg;
         _plansCharges = true;
       });
-      debugPrint('[LandingPage] _chargerPlans: ${_plans.length} plans actifs');
     } catch (e) {
       debugPrint('[LandingPage] _chargerPlans ERROR: $e');
       if (mounted) setState(() => _plansCharges = true);
@@ -110,8 +70,6 @@ class _LandingPageState extends State<LandingPage>
 
   @override
   void dispose() {
-    _plansStreamSub?.cancel();
-    _cfgStreamSub?.cancel();
     _heroController.dispose();
     _featuresController.dispose();
     _scrollController.dispose();
