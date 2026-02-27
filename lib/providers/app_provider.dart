@@ -1,12 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
-import '../firebase_options.dart';
 import '../models/user_model.dart';
 import '../models/entreprise_model.dart';
 import '../models/stand_model.dart';
@@ -85,41 +83,22 @@ class AppProvider extends ChangeNotifier {
   List<StandModel> get standsActifs => _stands.where((s) => s.actif).toList();
 
   // ── Assure que Firebase est initialisé ──────────────────────────────────────
+  // SIMPLIFIÉ : main() a déjà attendu Firebase.initializeApp() avec await.
+  // Cette méthode est donc un simple cache des instances.
   Future<bool> _ensureFirebase() async {
-    // Cas 1 : déjà initialisé dans cette session
     if (_authField != null && _dbField != null) return true;
-
-    // Cas 2 : Firebase initialisé dans main() avant runApp (cas normal)
-    if (Firebase.apps.isNotEmpty) {
-      _authField = FirebaseAuth.instance;
-      _dbField   = FirebaseFirestore.instance;
-      return true;
-    }
-
-    // Cas 3 : Firebase n'était pas encore prêt au démarrage (réseau très lent)
-    // On réessaie d'initialiser directement ici avec un timeout de 10s
     try {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      ).timeout(const Duration(seconds: 10));
+      // Firebase.apps est non-vide car main() a attendu l'init
       _authField = FirebaseAuth.instance;
       _dbField   = FirebaseFirestore.instance;
       return true;
-    } on FirebaseException catch (e) {
-      if (e.code == 'duplicate-app') {
-        // Déjà initialisé (race condition), on prend l'instance
-        _authField = FirebaseAuth.instance;
-        _dbField   = FirebaseFirestore.instance;
-        return true;
-      }
-      debugPrint('[AppProvider] ❌ _ensureFirebase FirebaseException: ${e.code}');
     } catch (e) {
-      debugPrint('[AppProvider] ❌ _ensureFirebase erreur: $e');
+      debugPrint('[AppProvider] ❌ _ensureFirebase: $e');
+      return false;
     }
-    return false;
   }
 
-  // ── Initialisation (appelé uniquement au moment de la connexion) ──────────
+  // ── Initialisation (appelée dans create: du ChangeNotifierProvider) ────────
   Future<void> initialiser() async {
     final ok = await _ensureFirebase();
     if (!ok) return;
