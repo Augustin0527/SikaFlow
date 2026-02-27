@@ -17,19 +17,27 @@ import 'screens/admin/admin_dashboard.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialiser Firebase — simple et direct
+  // Initialiser Firebase — OBLIGATOIRE avant runApp
+  // On attend que ce soit terminé avant toute chose
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
     if (kDebugMode) debugPrint('[SikaFlow] Firebase initialisé');
   } on FirebaseException catch (e) {
-    // App déjà initialisée (hot-reload)
+    // App déjà initialisée (hot-reload) — pas grave
     if (e.code != 'duplicate-app') {
       if (kDebugMode) debugPrint('[SikaFlow] FirebaseException: ${e.code} - ${e.message}');
     }
   } catch (e) {
     if (kDebugMode) debugPrint('[SikaFlow] Firebase erreur: $e');
+    // Attendre 2s et réessayer une fois
+    await Future.delayed(const Duration(seconds: 2));
+    try {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    } catch (_) {}
   }
 
   runApp(const SikaFlowApp());

@@ -73,11 +73,9 @@ class AppProvider extends ChangeNotifier {
   Future<void> initialiser() async {
     _setChargement(true);
 
-    // Charger la config des plans en parallèle (pas bloquant)
-    chargerPlansConfig();
-
     try {
       // Attendre le premier événement authStateChanges avec timeout 4s
+      // NE PAS appeler Firestore ici — Firebase peut ne pas être prêt
       final completer = Completer<User?>();
 
       StreamSubscription<User?>? sub;
@@ -99,8 +97,11 @@ class AppProvider extends ChangeNotifier {
 
       if (firebaseUser == null) {
         _viderEtat(); // _chargement = false + notifyListeners() inclus
+        // Charger les plans APRÈS que Firebase est prêt (auth résolue)
+        chargerPlansConfig();
       } else {
         await _chargerProfilFirebase(firebaseUser.uid);
+        chargerPlansConfig();
         // Écouter les changements d'auth après init
         _auth.authStateChanges().listen((User? u) async {
           if (u == null) {
