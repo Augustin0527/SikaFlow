@@ -1071,16 +1071,16 @@ class _LandingPageState extends State<LandingPage>
   // ════════════════════════════════════════════════════════════════════════════
 
   Widget _buildPricingSection(bool isWide) {
-    final remise  = _cfg.remiseAnnuelle;
-    final pct     = (remise * 100).round();
-    final essaiJ  = _cfg.dureeEssaiJours;
+    final remise = _cfg.remiseAnnuelle;
+    final pct    = (remise * 100).round();
+    final essaiJ = _cfg.dureeEssaiJours;
 
     return StatefulBuilder(
       builder: (ctx, setS) {
         return Container(
           color: AppTheme.cardDarker,
           padding: EdgeInsets.symmetric(
-              horizontal: isWide ? 80 : 24, vertical: 80),
+              horizontal: isWide ? 80 : 20, vertical: 80),
           child: Column(
             children: [
               _sectionHeader(
@@ -1088,9 +1088,9 @@ class _LandingPageState extends State<LandingPage>
                 'Tarification',
                 'Prix basé sur le nombre de stands. $essaiJ jours d\'essai gratuit, sans carte bancaire.',
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 36),
 
-              // Toggle mensuel / annuel
+              // ── Toggle Mensuel / Annuel ──────────────────────────────────
               Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
@@ -1117,12 +1117,11 @@ class _LandingPageState extends State<LandingPage>
                   ],
                 ),
               ),
-              const SizedBox(height: 48),
 
-              // Message promo si défini
+              // ── Message promo ────────────────────────────────────────────
               if (_cfg.messagePromo.isNotEmpty) ...[
+                const SizedBox(height: 20),
                 Container(
-                  margin: const EdgeInsets.only(bottom: 24),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
                     color: AppTheme.accentOrange.withValues(alpha: 0.08),
@@ -1142,60 +1141,187 @@ class _LandingPageState extends State<LandingPage>
                   ),
                 ),
               ],
+              const SizedBox(height: 48),
 
-              // Essai gratuit card (si actif)
-              if (_cfg.essaiActif) ...[
-                _pricingCardEssai(),
-                const SizedBox(height: 32),
-              ],
-
-              // Grille des plans
+              // ── Cartes de plans ──────────────────────────────────────────
               if (!_plansCharges)
-                const CircularProgressIndicator(color: AppTheme.accentOrange)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: CircularProgressIndicator(color: AppTheme.accentOrange),
+                )
               else if (_plans.isEmpty)
                 const Text('Aucun plan disponible',
                     style: TextStyle(color: AppTheme.textSecondary))
               else
                 isWide
-                  ? Wrap(
-                      spacing: 20,
-                      runSpacing: 20,
-                      alignment: WrapAlignment.center,
-                      children: _plans
-                          .map((p) => SizedBox(
-                              width: 260,
-                              child: _pricingPlanCard(p, _periodeAnnuelle, remise)))
-                          .toList(),
-                    )
-                  : Column(
-                      children: _plans
-                          .map((p) => Padding(
-                                padding: const EdgeInsets.only(bottom: 16),
-                                child: _pricingPlanCard(p, _periodeAnnuelle, remise),
-                              ))
-                          .toList(),
-                    ),
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: _plans.asMap().entries.map((entry) {
+                          final idx  = entry.key;
+                          final plan = entry.value;
+                          final isMiddle = idx == 1 && _plans.length == 3;
+                          return Expanded(
+                            child: Padding(
+                              padding: EdgeInsets.only(
+                                left:  idx == 0 ? 0 : 10,
+                                right: idx == _plans.length - 1 ? 0 : 10,
+                                top:   isMiddle ? 0 : 16, // plan central surlevé
+                              ),
+                              child: _pricingPlanCard(
+                                plan, _periodeAnnuelle, remise,
+                                elevated: isMiddle,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      )
+                    : Column(
+                        children: _plans.asMap().entries.map((entry) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: _pricingPlanCard(
+                              entry.value, _periodeAnnuelle, remise,
+                              elevated: entry.key == 1 && _plans.length == 3,
+                            ),
+                          );
+                        }).toList(),
+                      ),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 40),
+
+              // ── Bande essai gratuit ──────────────────────────────────────
+              if (_cfg.essaiActif)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        AppTheme.success.withValues(alpha: 0.08),
+                        AppTheme.accentOrange.withValues(alpha: 0.06),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppTheme.success.withValues(alpha: 0.3)),
+                  ),
+                  child: isWide
+                      ? Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: AppTheme.success.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '$essaiJ JOURS GRATUITS',
+                                style: const TextStyle(
+                                    color: AppTheme.success,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 13,
+                                    letterSpacing: 0.5),
+                              ),
+                            ),
+                            const SizedBox(width: 20),
+                            const Expanded(
+                              child: Text(
+                                'Toutes les fonctionnalités incluses · Aucune carte bancaire requise · Annulez à tout moment',
+                                style: TextStyle(
+                                    color: AppTheme.textSecondary,
+                                    fontSize: 14,
+                                    height: 1.5),
+                              ),
+                            ),
+                            const SizedBox(width: 20),
+                            ElevatedButton.icon(
+                              onPressed: () => Navigator.push(context,
+                                  MaterialPageRoute(
+                                      builder: (_) => const InscriptionScreen())),
+                              icon: const Icon(Icons.rocket_launch_rounded, size: 16),
+                              label: const Text('Démarrer l\'essai'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.success,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 20, vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                          ],
+                        )
+                      : Column(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: AppTheme.success.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '$essaiJ JOURS GRATUITS',
+                                style: const TextStyle(
+                                    color: AppTheme.success,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 12,
+                                    letterSpacing: 0.5),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Toutes les fonctionnalités incluses\nAucune carte bancaire requise',
+                              style: TextStyle(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 13,
+                                  height: 1.5),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: () => Navigator.push(context,
+                                    MaterialPageRoute(
+                                        builder: (_) => const InscriptionScreen())),
+                                icon: const Icon(Icons.rocket_launch_rounded, size: 16),
+                                label: const Text('Démarrer l\'essai gratuit'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.success,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 13),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+
+              const SizedBox(height: 24),
+              // ── Info paiement ────────────────────────────────────────────
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: AppTheme.success.withValues(alpha: 0.08),
+                  color: AppTheme.cardDark,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                      color: AppTheme.success.withValues(alpha: 0.3)),
+                  border: Border.all(color: AppTheme.divider),
                 ),
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.payment_rounded,
-                        color: AppTheme.success, size: 18),
+                        color: AppTheme.textSecondary, size: 18),
                     SizedBox(width: 10),
                     Flexible(
                       child: Text(
-                        'Paiement via MTN MoMo, Moov Money ou carte bancaire',
-                        style: TextStyle(color: AppTheme.success, fontSize: 13),
+                        'Paiement via MTN MoMo, Moov Money ou virement bancaire',
+                        style: TextStyle(
+                            color: AppTheme.textSecondary, fontSize: 13),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -1263,9 +1389,9 @@ class _LandingPageState extends State<LandingPage>
               const Icon(Icons.timer_outlined,
                   color: AppTheme.textHint, size: 18),
               const SizedBox(width: 6),
-              const Text('30 jours',
+              Text('${_cfg.dureeEssaiJours} jours',
                   style:
-                      TextStyle(color: AppTheme.textHint, fontSize: 13)),
+                      const TextStyle(color: AppTheme.textHint, fontSize: 13)),
             ],
           ),
           const SizedBox(height: 16),
@@ -1326,79 +1452,127 @@ class _LandingPageState extends State<LandingPage>
     );
   }
 
-  Widget _pricingPlanCard(PlanConfig plan, bool annuel, double remise) {
+  Widget _pricingPlanCard(PlanConfig plan, bool annuel, double remise,
+      {bool elevated = false}) {
     final prixMensuel = annuel ? plan.prixMensuelAvecRemise(remise) : plan.prixMensuel;
-    final totalAnnuel = plan.totalPeriode(12, remise);
-    final economie    = plan.economieAnnuelle(remise);
-    final color       = Color(plan.couleurHex);
-    // Le 2e plan actif est "populaire"
-    final plansActifs = _plans;
-    final isPopular   = plansActifs.length >= 2 && plansActifs[1].code == plan.code;
+    final prixOriginal = plan.prixMensuel;
+    final totalAnnuel  = plan.totalPeriode(12, remise);
+    final economie     = plan.economieAnnuelle(remise);
+    final color        = Color(plan.couleurHex);
+    // Badge populaire : depuis Firestore ou par défaut le plan central (index 1)
+    final isPopular    = plan.populaire || elevated;
+
+    // Features : depuis Firestore si dispo, sinon fallback
+    final features = plan.features.isNotEmpty
+        ? plan.features
+        : _featuresParDefaut(plan);
 
     return Container(
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppTheme.cardDark,
+        color: isPopular ? AppTheme.cardDark : AppTheme.backgroundDark,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isPopular
-              ? AppTheme.accentOrange.withValues(alpha: 0.6)
-              : color.withValues(alpha: 0.35),
+              ? color.withValues(alpha: 0.7)
+              : color.withValues(alpha: 0.30),
           width: isPopular ? 2 : 1.5,
         ),
         boxShadow: isPopular
-            ? [BoxShadow(
-                color: AppTheme.accentOrange.withValues(alpha: 0.12),
-                blurRadius: 20, spreadRadius: 2,
-              )]
+            ? [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.18),
+                  blurRadius: 28,
+                  spreadRadius: 2,
+                  offset: const Offset(0, 6),
+                ),
+              ]
             : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Badge populaire ────────────────────────────────────────────
           if (isPopular)
             Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              margin: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                gradient: AppTheme.accentGradient,
+                color: color.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: color.withValues(alpha: 0.4)),
               ),
-              child: const Text('POPULAIRE',
-                  style: TextStyle(color: Colors.white, fontSize: 10,
-                      fontWeight: FontWeight.bold)),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.star_rounded, color: color, size: 12),
+                  const SizedBox(width: 4),
+                  Text('POPULAIRE',
+                      style: TextStyle(
+                          color: color,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.5)),
+                ],
+              ),
             ),
+
+          // ── En-tête plan ───────────────────────────────────────────────
           Row(
             children: [
               Container(
-                width: 40, height: 40,
+                width: 42,
+                height: 42,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(Icons.storefront_rounded, color: color, size: 20),
+                child: Icon(_iconPourPlan(plan.code), color: color, size: 22),
               ),
-              const SizedBox(width: 10),
-              Text(plan.label,
-                  style: const TextStyle(color: Colors.white,
-                      fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(plan.label,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900)),
+                  Text(
+                    plan.maxStands == -1
+                        ? '${plan.minStands}+ stands'
+                        : plan.minStands == plan.maxStands
+                            ? '${plan.minStands} stand'
+                            : '${plan.minStands}–${plan.maxStands} stands',
+                    style: TextStyle(
+                        color: color,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(plan.description,
               style: const TextStyle(
                   color: AppTheme.textSecondary, fontSize: 12, height: 1.4)),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
+
+          // ── Prix ───────────────────────────────────────────────────────
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
                 _pricingFmt.format(prixMensuel),
                 style: TextStyle(
-                    color: color, fontSize: 28, fontWeight: FontWeight.w900),
+                    color: color,
+                    fontSize: 32,
+                    fontWeight: FontWeight.w900,
+                    height: 1),
               ),
               const Padding(
-                padding: EdgeInsets.only(bottom: 4, left: 4),
+                padding: EdgeInsets.only(bottom: 5, left: 3),
                 child: Text(' F/mois',
                     style: TextStyle(
                         color: AppTheme.textSecondary, fontSize: 13)),
@@ -1406,53 +1580,126 @@ class _LandingPageState extends State<LandingPage>
             ],
           ),
           if (annuel && remise > 0) ...[
-            const SizedBox(height: 4),
-            Text('${_pricingFmt.format(totalAnnuel)} F/an',
-                style: const TextStyle(color: AppTheme.textHint, fontSize: 11)),
+            const SizedBox(height: 6),
+            Row(children: [
+              // Prix barré
+              Text(
+                '${_pricingFmt.format(prixOriginal)} F',
+                style: const TextStyle(
+                    color: AppTheme.textHint,
+                    fontSize: 12,
+                    decoration: TextDecoration.lineThrough),
+              ),
+              const SizedBox(width: 8),
+              // Total annuel
+              Text(
+                '${_pricingFmt.format(totalAnnuel)} F/an',
+                style: const TextStyle(
+                    color: AppTheme.textSecondary, fontSize: 12),
+              ),
+            ]),
             const SizedBox(height: 6),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
               decoration: BoxDecoration(
                 color: AppTheme.success.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(7),
+                border: Border.all(
+                    color: AppTheme.success.withValues(alpha: 0.3)),
               ),
               child: Text(
-                'Économie ${_pricingFmt.format(economie)} F/an',
-                style: const TextStyle(color: AppTheme.success, fontSize: 10,
+                '✓ Économie ${_pricingFmt.format(economie)} F/an',
+                style: const TextStyle(
+                    color: AppTheme.success,
+                    fontSize: 11,
                     fontWeight: FontWeight.bold),
               ),
             ),
           ],
-          const SizedBox(height: 16),
-          const Divider(color: AppTheme.divider, height: 1),
-          const SizedBox(height: 12),
-          _planFeature(color, plan.maxStandsLabel),
-          const SizedBox(height: 6),
-          _planFeature(color, 'Agents & membres illimités'),
-          const SizedBox(height: 6),
-          _planFeature(color, 'Opérations illimitées'),
-          const SizedBox(height: 6),
-          _planFeature(color, 'Rapports complets'),
+
           const SizedBox(height: 18),
+          Divider(color: color.withValues(alpha: 0.15), height: 1),
+          const SizedBox(height: 14),
+
+          // ── Features ───────────────────────────────────────────────────
+          ...features.map((f) => Padding(
+                padding: const EdgeInsets.only(bottom: 9),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 18,
+                      height: 18,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.check_rounded,
+                          color: color, size: 11),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(f,
+                          style: const TextStyle(
+                              color: AppTheme.textSecondary,
+                              fontSize: 12.5,
+                              height: 1.3)),
+                    ),
+                  ],
+                ),
+              )),
+
+          const SizedBox(height: 20),
+
+          // ── Bouton CTA ─────────────────────────────────────────────────
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () => Navigator.push(context,
                   MaterialPageRoute(builder: (_) => const InscriptionScreen())),
               style: ElevatedButton.styleFrom(
-                backgroundColor: isPopular ? AppTheme.accentOrange : color,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                backgroundColor: isPopular ? color : color.withValues(alpha: 0.9),
+                foregroundColor: plan.couleurHex == 0xFFFFCC00
+                    ? const Color(0xFF1A1A00)
+                    : Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                    borderRadius: BorderRadius.circular(11)),
+                elevation: isPopular ? 4 : 0,
+                shadowColor: color.withValues(alpha: 0.3),
               ),
-              child: const Text('Commencer',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
+              child: Text(
+                'Choisir ${plan.label}',
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 14),
+              ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  IconData _iconPourPlan(String code) {
+    switch (code) {
+      case 'solo':       return Icons.person_rounded;
+      case 'pro':        return Icons.groups_rounded;
+      case 'enterprise': return Icons.domain_rounded;
+      default:           return Icons.storefront_rounded;
+    }
+  }
+
+  List<String> _featuresParDefaut(PlanConfig plan) {
+    // Fallback si pas de features dans Firestore
+    final standsLabel = plan.maxStands == -1
+        ? 'Stands illimités'
+        : '${plan.minStands}–${plan.maxStands} stands actifs';
+    return [
+      standsLabel,
+      'Agents & contrôleurs illimités',
+      'Opérations illimitées',
+      'Rapports et statistiques',
+      'Alertes de solde',
+    ];
   }
 
   Widget _planFeature(Color color, String text) {

@@ -10,15 +10,17 @@ import 'package:flutter/foundation.dart';
 
 // ── Plan individuel ────────────────────────────────────────────────────────
 class PlanConfig {
-  final String  code;
-  final String  label;
-  final int     minStands;
-  final int     maxStands;    // -1 = illimité
-  final int     prixMensuel;  // FCFA
-  final String  description;
-  final int     couleurHex;
-  final bool    actif;
-  final int     ordre;        // pour le tri
+  final String       code;
+  final String       label;
+  final int          minStands;
+  final int          maxStands;    // -1 = illimité
+  final int          prixMensuel;  // FCFA
+  final String       description;
+  final int          couleurHex;
+  final bool         actif;
+  final int          ordre;        // pour le tri
+  final List<String> features;     // fonctionnalités listées
+  final bool         populaire;    // badge "Populaire"
 
   const PlanConfig({
     required this.code,
@@ -28,8 +30,10 @@ class PlanConfig {
     required this.prixMensuel,
     required this.description,
     required this.couleurHex,
-    this.actif = true,
-    this.ordre = 0,
+    this.actif    = true,
+    this.ordre    = 0,
+    this.features = const [],
+    this.populaire = false,
   });
 
   // ── Prix calculé selon la période ────────────────────────────────────────
@@ -58,6 +62,8 @@ class PlanConfig {
         couleurHex:  (m['couleur_hex'] ?? 0xFF4CAF50) as int,
         actif:       (m['actif']       ?? true) as bool,
         ordre:       (m['ordre']       ?? 0)  as int,
+        features:    ((m['features']   as List?) ?? []).map((e) => e.toString()).toList(),
+        populaire:   (m['populaire']   ?? false) as bool,
       );
 
   Map<String, dynamic> toMap() => {
@@ -70,18 +76,22 @@ class PlanConfig {
         'couleur_hex': couleurHex,
         'actif':       actif,
         'ordre':       ordre,
+        'features':    features,
+        'populaire':   populaire,
       };
 
   PlanConfig copyWith({
-    String?  code,
-    String?  label,
-    int?     minStands,
-    int?     maxStands,
-    int?     prixMensuel,
-    String?  description,
-    int?     couleurHex,
-    bool?    actif,
-    int?     ordre,
+    String?       code,
+    String?       label,
+    int?          minStands,
+    int?          maxStands,
+    int?          prixMensuel,
+    String?       description,
+    int?          couleurHex,
+    bool?         actif,
+    int?          ordre,
+    List<String>? features,
+    bool?         populaire,
   }) => PlanConfig(
     code:        code        ?? this.code,
     label:       label       ?? this.label,
@@ -92,6 +102,8 @@ class PlanConfig {
     couleurHex:  couleurHex  ?? this.couleurHex,
     actif:       actif       ?? this.actif,
     ordre:       ordre       ?? this.ordre,
+    features:    features    ?? this.features,
+    populaire:   populaire   ?? this.populaire,
   );
 }
 

@@ -745,8 +745,11 @@ class _PlanEditeurSheetState extends State<_PlanEditeurSheet> {
   late TextEditingController _maxStandsCtrl;
   late TextEditingController _prixCtrl;
   late TextEditingController _codeCtrl;
-  bool _illimite = false;
-  int  _couleurHex = 0xFF4CAF50;
+  bool         _illimite   = false;
+  bool         _populaire  = false;
+  int          _couleurHex = 0xFF4CAF50;
+  List<String> _features   = [];
+  final _featCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -761,6 +764,8 @@ class _PlanEditeurSheetState extends State<_PlanEditeurSheet> {
     _codeCtrl      = TextEditingController(text: p.code);
     _illimite      = p.maxStands == -1;
     _couleurHex    = p.couleurHex;
+    _populaire     = p.populaire;
+    _features      = List<String>.from(p.features);
   }
 
   @override
@@ -768,6 +773,7 @@ class _PlanEditeurSheetState extends State<_PlanEditeurSheet> {
     _labelCtrl.dispose(); _descCtrl.dispose();
     _minStandsCtrl.dispose(); _maxStandsCtrl.dispose();
     _prixCtrl.dispose(); _codeCtrl.dispose();
+    _featCtrl.dispose();
     super.dispose();
   }
 
@@ -781,6 +787,8 @@ class _PlanEditeurSheetState extends State<_PlanEditeurSheet> {
       maxStands:   _illimite ? -1 : (int.tryParse(_maxStandsCtrl.text) ?? -1),
       prixMensuel: int.tryParse(_prixCtrl.text) ?? 0,
       couleurHex:  _couleurHex,
+      populaire:   _populaire,
+      features:    _features,
     );
     widget.onSave(updated);
     Navigator.pop(context);
@@ -944,6 +952,151 @@ class _PlanEditeurSheetState extends State<_PlanEditeurSheet> {
                   );
                 }).toList(),
               ),
+              const SizedBox(height: 16),
+
+              // Badge populaire
+              Row(children: [
+                Switch(
+                  value: _populaire,
+                  activeColor: _orange,
+                  onChanged: (v) => setState(() => _populaire = v),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.star_rounded, color: Color(0xFFFFCC00), size: 18),
+                const SizedBox(width: 6),
+                const Text('Badge « Populaire »',
+                    style: TextStyle(color: _textS, fontSize: 13)),
+              ]),
+              const SizedBox(height: 16),
+
+              // Features (liste des avantages)
+              Row(children: [
+                Container(
+                  width: 4, height: 16,
+                  decoration: BoxDecoration(
+                    color: _orange, borderRadius: BorderRadius.circular(2)),
+                ),
+                const SizedBox(width: 8),
+                const Text('Fonctionnalités incluses',
+                    style: TextStyle(color: _textP,
+                        fontSize: 13, fontWeight: FontWeight.bold)),
+              ]),
+              const SizedBox(height: 8),
+              // Liste existante
+              if (_features.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 8),
+                  child: Text('Aucune fonctionnalité ajoutée',
+                      style: TextStyle(color: _textS, fontSize: 12)),
+                )
+              else
+                ReorderableListView(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  onReorder: (old, nw) {
+                    setState(() {
+                      if (nw > old) nw--;
+                      final item = _features.removeAt(old);
+                      _features.insert(nw, item);
+                    });
+                  },
+                  children: _features.asMap().entries.map((e) {
+                    return Container(
+                      key: ValueKey('feat_${e.key}'),
+                      margin: const EdgeInsets.only(bottom: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _bg,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: _border),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.drag_indicator_rounded,
+                              color: _textS, size: 18),
+                          const SizedBox(width: 8),
+                          Icon(Icons.check_circle_rounded,
+                              color: Color(_couleurHex), size: 14),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(e.value,
+                              style: const TextStyle(
+                                  color: _textP, fontSize: 13))),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded,
+                                color: Colors.red, size: 16),
+                            onPressed: () => setState(() {
+                              _features.removeAt(e.key);
+                            }),
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              const SizedBox(height: 8),
+              // Champ ajout
+              Row(children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _featCtrl,
+                    style: const TextStyle(color: _textP, fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Ex: Rapports avancés + exports',
+                      hintStyle: const TextStyle(color: _textS, fontSize: 12),
+                      prefixIcon: const Icon(Icons.add_task_rounded,
+                          color: _orange, size: 18),
+                      filled: true,
+                      fillColor: _bg,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: _border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: _border),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: _orange, width: 1.5),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                    ),
+                    onFieldSubmitted: (v) {
+                      if (v.trim().isNotEmpty) {
+                        setState(() {
+                          _features.add(v.trim());
+                          _featCtrl.clear();
+                        });
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: () {
+                    final v = _featCtrl.text.trim();
+                    if (v.isNotEmpty) {
+                      setState(() {
+                        _features.add(v);
+                        _featCtrl.clear();
+                      });
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _orange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Icon(Icons.add_rounded, size: 20),
+                ),
+              ]),
               const SizedBox(height: 24),
 
               // Bouton valider
