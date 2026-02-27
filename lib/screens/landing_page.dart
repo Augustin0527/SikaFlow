@@ -119,20 +119,21 @@ class _LandingPageState extends State<LandingPage>
               ],
             ),
             actions: [
-              if (isWide)
-                TextButton(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  ),
-                  child: const Text(
-                    'Se Connecter',
-                    style: TextStyle(color: AppTheme.textSecondary),
-                  ),
+              // Bouton "Se Connecter" toujours visible (desktop + mobile)
+              TextButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
                 ),
-              const SizedBox(width: 8),
+                icon: const Icon(Icons.login_rounded, size: 16, color: AppTheme.textSecondary),
+                label: Text(
+                  isWide ? 'Se Connecter' : 'Connexion',
+                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                ),
+              ),
+              const SizedBox(width: 4),
               Padding(
-                padding: const EdgeInsets.only(right: 16),
+                padding: const EdgeInsets.only(right: 12),
                 child: ElevatedButton(
                   onPressed: () => Navigator.push(
                     context,
@@ -141,15 +142,17 @@ class _LandingPageState extends State<LandingPage>
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.accentOrange,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isWide ? 20 : 14,
+                      vertical: 10,
+                    ),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10)),
                   ),
-                  child: const Text(
-                    'S\'inscrire',
-                    style: TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold),
+                  child: Text(
+                    isWide ? 'S\'inscrire' : 'Essai',
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                 ),
               ),
@@ -2146,10 +2149,30 @@ class _LandingPageState extends State<LandingPage>
           const SizedBox(height: 40),
           const Divider(color: AppTheme.divider),
           const SizedBox(height: 24),
-          const Text(
-            '© 2025 SikaFlow — GFPEANC. Tous droits réservés. Solution Mobile Money Bénin.',
-            style: TextStyle(color: AppTheme.textHint, fontSize: 13),
-            textAlign: TextAlign.center,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Expanded(
+                child: Text(
+                  '© 2025 SikaFlow — GFPEANC. Tous droits réservés. Solution Mobile Money Bénin.',
+                  style: TextStyle(color: AppTheme.textHint, fontSize: 13),
+                ),
+              ),
+              // Lien discret vers l'espace admin
+              TextButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                ),
+                child: const Text(
+                  'Espace Admin',
+                  style: TextStyle(color: AppTheme.textHint, fontSize: 11),
+                ),
+              ),
+            ],
           ),
         ],
       ),

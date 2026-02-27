@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import '../../providers/app_provider.dart';
 import '../../services/firestore_service.dart';
 import '../../theme/app_theme.dart';
 import 'admin_entreprise_detail.dart';
@@ -39,6 +41,34 @@ class _AdminDashboardState extends State<AdminDashboard>
     if (mounted) setState(() { _stats = stats; _chargement = false; });
   }
 
+  Future<void> _confirmerDeconnexion(BuildContext ctx) async {
+    final confirmed = await showDialog<bool>(
+      context: ctx,
+      builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF1A2744),
+        title: const Text('Déconnexion', style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'Voulez-vous vous déconnecter du panneau administrateur ?',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Annuler', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Se déconnecter', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      context.read<AppProvider>().seDeconnecter();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -66,8 +96,15 @@ class _AdminDashboardState extends State<AdminDashboard>
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
+            tooltip: 'Actualiser',
             onPressed: () { setState(() => _chargement = true); _chargerStats(); },
           ),
+          IconButton(
+            icon: const Icon(Icons.logout_rounded, color: Colors.white70),
+            tooltip: 'Se déconnecter',
+            onPressed: () => _confirmerDeconnexion(context),
+          ),
+          const SizedBox(width: 4),
         ],
         bottom: TabBar(
           controller: _tabController,
