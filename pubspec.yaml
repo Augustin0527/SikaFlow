@@ -1,5 +1,5 @@
 name: mobile_money_control
-description: "SikaFlow - Application de gestion des opérations Mobile Money au Bénin (MTN, Moov, Celtiis)."
+description: "SikaFlow - Gestion des opérations Mobile Money au Bénin (MTN, Moov, Celtiis)."
 publish_to: 'none'
 version: 1.0.0+1
 
