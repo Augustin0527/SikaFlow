@@ -79,54 +79,48 @@ class AppProvider extends ChangeNotifier {
 
   // ── Initialisation ────────────────────────────────────────────────────────
   Future<void> initialiser() async {
-    _setChargement(true);
+    // NE PAS notifier ici — évite un rebuild prématuré
+    _chargement = true;
 
-    // Initialiser les instances Firebase ICI, après Firebase.initializeApp()
-    // Sur Web, les instances doivent être créées après initializeApp()
+    // Instances Firebase — créées après Firebase.initializeApp()
     _auth = FirebaseAuth.instance;
     _db   = FirebaseFirestore.instance;
 
+    // ── Timer de sécurité absolu : quoi qu'il arrive, on sort du splash en 8s ──
+    Timer(const Duration(seconds: 8), () {
+      if (_chargement) {
+        debugPrint('[AppProvider] ⏰ Timer sécurité déclenché — forçage fin chargement');
+        _viderEtat();
+      }
+    });
+
     try {
-      // Attendre le premier événement authStateChanges avec timeout 4s
-      // NE PAS appeler Firestore ici — Firebase peut ne pas être prêt
-      final completer = Completer<User?>();
+      // Sur Web, authStateChanges() peut ne jamais se déclencher si
+      // Firebase JS n'est pas encore prêt. On utilise currentUser (synchrone)
+      // qui est disponible immédiatement après initializeApp().
+      final currentUser = _auth.currentUser;
 
-      StreamSubscription<User?>? sub;
-      sub = _auth.authStateChanges().listen((user) {
-        if (!completer.isCompleted) completer.complete(user);
-      }, onError: (e) {
-        debugPrint('[AppProvider] authStateChanges error: $e');
-        if (!completer.isCompleted) completer.complete(null);
-      });
-
-      User? firebaseUser;
-      try {
-        firebaseUser = await completer.future
-            .timeout(const Duration(seconds: 4), onTimeout: () => null);
-      } catch (_) {
-        firebaseUser = null;
-      }
-      await sub.cancel();
-
-      if (firebaseUser == null) {
-        _viderEtat(); // _chargement = false + notifyListeners() inclus
-        // Charger les plans APRÈS que Firebase est prêt (auth résolue)
-        chargerPlansConfig();
+      if (currentUser != null) {
+        // Utilisateur déjà connecté (session persistée)
+        await _chargerProfilFirebase(currentUser.uid);
       } else {
-        await _chargerProfilFirebase(firebaseUser.uid);
-        chargerPlansConfig();
-        // Écouter les changements d'auth après init
-        _auth.authStateChanges().listen((User? u) async {
-          if (u == null) {
-            _viderEtat();
-          } else if (u.uid != _utilisateurConnecte?.id) {
-            await _chargerProfilFirebase(u.uid);
-          }
-        });
+        // Pas de session → afficher la landing page
+        _viderEtat();
       }
+
+      // Charger les plans (non bloquant)
+      chargerPlansConfig();
+
+      // Écouter les changements d'auth APRÈS l'init (déconnexion / reconnexion)
+      _auth.authStateChanges().listen((User? u) async {
+        if (u == null && _utilisateurConnecte != null) {
+          _viderEtat();
+        } else if (u != null && u.uid != _utilisateurConnecte?.id) {
+          await _chargerProfilFirebase(u.uid);
+        }
+      });
     } catch (e) {
       debugPrint('[AppProvider] initialiser error: $e');
-      // Garantir que le chargement se termine même en cas d'erreur
       _viderEtat();
     }
   }
