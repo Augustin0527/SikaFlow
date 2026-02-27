@@ -57,37 +57,54 @@ class _LandingPageState extends State<LandingPage>
   }
 
   void _ecouterFirestore() {
-    // Stream des plans — se met à jour automatiquement dès qu'un admin modifie
-    _plansStreamSub = ConfigAbonnementService.plansStream().listen((plans) {
-      if (mounted) {
+    // ── Plans ────────────────────────────────────────────────────────────────
+    // On s'abonne au stream Firestore (temps réel).
+    // Avec persistenceEnabled:false (voir main.dart), chaque événement vient
+    // directement du serveur — plus de cache périmé.
+    _plansStreamSub = ConfigAbonnementService.plansStream().listen(
+      (plans) {
+        if (!mounted) return;
         setState(() {
           _plans        = plans.where((p) => p.actif).toList();
           _plansCharges = true;
         });
-      }
-    }, onError: (e) {
-      debugPrint('[LandingPage] plansStream error: $e');
-      // Fallback: chargement ponctuel
-      _chargerPlans();
-    });
+        debugPrint('[LandingPage] plans reçus du stream: ${_plans.length} actifs');
+      },
+      onError: (e) {
+        debugPrint('[LandingPage] plansStream error: $e — fallback HTTP');
+        if (mounted) setState(() => _plansCharges = true);
+        // Fallback lecture directe
+        _chargerPlans();
+      },
+    );
 
-    // Stream de la config globale — remise, durée essai, message promo
-    _cfgStreamSub = ConfigAbonnementService.globalStream().listen((cfg) {
-      if (mounted) { setState(() => _cfg = cfg); }
-    }, onError: (e) {
-      debugPrint('[LandingPage] globalStream error: $e');
-    });
+    // ── Config globale ────────────────────────────────────────────────────────
+    _cfgStreamSub = ConfigAbonnementService.globalStream().listen(
+      (cfg) {
+        if (mounted) setState(() => _cfg = cfg);
+      },
+      onError: (e) {
+        debugPrint('[LandingPage] globalStream error: $e');
+      },
+    );
   }
 
   Future<void> _chargerPlans() async {
-    final plans = await ConfigAbonnementService.chargerPlans();
-    final cfg   = await ConfigAbonnementService.chargerGlobal();
-    if (mounted) {
+    try {
+      final plans = await ConfigAbonnementService.chargerPlans();
+      final cfg   = await ConfigAbonnementService.chargerGlobal();
+      if (!mounted) return;
       setState(() {
-        _plans        = plans.where((p) => p.actif).toList();
+        if (plans.isNotEmpty) {
+          _plans = plans.where((p) => p.actif).toList();
+        }
         _cfg          = cfg;
         _plansCharges = true;
       });
+      debugPrint('[LandingPage] _chargerPlans: ${_plans.length} plans actifs');
+    } catch (e) {
+      debugPrint('[LandingPage] _chargerPlans ERROR: $e');
+      if (mounted) setState(() => _plansCharges = true);
     }
   }
 
@@ -1179,10 +1196,25 @@ class _LandingPageState extends State<LandingPage>
 
               // Grille des plans
               if (!_plansCharges)
-                const CircularProgressIndicator(color: AppTheme.accentOrange)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: CircularProgressIndicator(color: AppTheme.accentOrange),
+                )
               else if (_plans.isEmpty)
-                const Text('Aucun plan disponible',
-                    style: TextStyle(color: AppTheme.textSecondary))
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 32),
+                  child: Column(children: [
+                    const Icon(Icons.hourglass_empty, color: AppTheme.textHint, size: 40),
+                    const SizedBox(height: 12),
+                    const Text('Plans en cours de configuration…',
+                        style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: _chargerPlans,
+                      child: const Text('Réessayer', style: TextStyle(color: AppTheme.accentOrange)),
+                    ),
+                  ]),
+                )
               else
                 isWide
                   ? Wrap(

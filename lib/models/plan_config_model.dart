@@ -159,123 +159,60 @@ class ConfigAbonnementService {
   static final _db = FirebaseFirestore.instance;
   static const _col = 'config_abonnement';
 
-  // ── Parseur sécurisé (Web + natif) ──────────────────────────────────────
-  // Sur Web, Firestore JS retourne des Map<Object?,Object?> et des num au lieu
-  // de Map<String,dynamic> et int. On normalise ici.
+  // ── Parseur universel Web + natif ────────────────────────────────────────
+  // Le SDK Firebase JS (Web) retourne des Map<Object?,Object?> et des num.
+  // On normalise systématiquement pour éviter tout TypeError silencieux.
+  static Map<String, dynamic> _normaliserMap(Map raw) {
+    return Map<String, dynamic>.fromEntries(
+      raw.entries.map((e) => MapEntry(e.key.toString(), e.value)),
+    );
+  }
+
   static List<PlanConfig> _parseItems(dynamic rawItems) {
-    if (rawItems == null || rawItems is! List) return [];
+    if (rawItems == null || rawItems is! List || rawItems.isEmpty) return [];
     final result = <PlanConfig>[];
     for (final e in rawItems) {
       try {
-        // Convertit Map<Object?,Object?> → Map<String,dynamic>
-        final map = Map<String, dynamic>.fromEntries(
-          (e as Map).entries.map((entry) =>
-            MapEntry(entry.key.toString(), entry.value),
-          ),
-        );
-        result.add(PlanConfig.fromMap(map));
+        result.add(PlanConfig.fromMap(_normaliserMap(e as Map)));
       } catch (err) {
-        debugPrint('[ConfigAbonnementService] _parseItems skip item: $err');
+        debugPrint('[ConfigAbonnementService] _parseItems skip: $err');
       }
     }
     return result;
   }
 
-  // ── Charger tous les plans (lecture réseau forcée, sans cache) ───────────
-  static Future<List<PlanConfig>> chargerPlans() async {
-    try {
-      // GetOptions(source: Source.server) force la lecture depuis le serveur
-      // et évite le snapshot cache vide qui déclenchait l'initialisation
-      final doc = await _db.collection(_col).doc('plans')
-          .get(const GetOptions(source: Source.server));
-
-      if (!doc.exists) {
-        debugPrint('[ConfigAbonnementService] plans doc absent sur serveur');
-        return kPlansParDefaut.map(PlanConfig.fromMap).toList();
-      }
-
-      final items = _parseItems(doc.data()?['items']);
-      if (items.isEmpty) {
-        debugPrint('[ConfigAbonnementService] items vide (serveur)');
-        return kPlansParDefaut.map(PlanConfig.fromMap).toList();
-      }
-
-      items.sort((a, b) => a.ordre.compareTo(b.ordre));
-      debugPrint('[ConfigAbonnementService] ${items.length} plans chargés depuis serveur');
-      return items;
-    } catch (e, st) {
-      debugPrint('[ConfigAbonnementService] chargerPlans ERROR: $e\n$st');
-      // Dernier recours : lecture depuis le cache local
-      try {
-        final docCache = await _db.collection(_col).doc('plans').get();
-        if (docCache.exists) {
-          final items = _parseItems(docCache.data()?['items']);
-          if (items.isNotEmpty) {
-            items.sort((a, b) => a.ordre.compareTo(b.ordre));
-            debugPrint('[ConfigAbonnementService] ${items.length} plans depuis cache');
-            return items;
-          }
-        }
-      } catch (_) {}
-      return kPlansParDefaut.map(PlanConfig.fromMap).toList();
-    }
-  }
-
-  // ── Stream en temps réel ─────────────────────────────────────────────────
+  // ── Stream principal (SEULE SOURCE DE VÉRITÉ pour l'UI) ─────────────────
+  // Utilise snapshots() en temps réel.
+  // Avec persistenceEnabled:false (main.dart), chaque snapshot vient du serveur.
+  // Ne retourne JAMAIS kPlansParDefaut — retourne une liste vide si absent.
   static Stream<List<PlanConfig>> plansStream() {
-    return _db.collection(_col).doc('plans').snapshots().map((doc) {
-      if (!doc.exists) {
-        debugPrint('[ConfigAbonnementService] stream: doc absent');
-        return kPlansParDefaut.map(PlanConfig.fromMap).toList();
+    return _db
+        .collection(_col)
+        .doc('plans')
+        .snapshots(includeMetadataChanges: false)
+        .where((doc) => !doc.metadata.isFromCache) // ignorer les snapshots depuis le cache
+        .map((doc) {
+      if (!doc.exists || doc.data() == null) {
+        debugPrint('[ConfigAbonnementService] stream: document absent');
+        return <PlanConfig>[];
       }
-      final items = _parseItems(doc.data()?['items']);
-      if (items.isEmpty) {
-        debugPrint('[ConfigAbonnementService] stream: items vide');
-        return kPlansParDefaut.map(PlanConfig.fromMap).toList();
-      }
+      final items = _parseItems(doc.data()!['items']);
       items.sort((a, b) => a.ordre.compareTo(b.ordre));
-      debugPrint('[ConfigAbonnementService] stream: ${items.length} plans reçus');
+      debugPrint('[ConfigAbonnementService] stream: ${items.length} plans (${items.where((p) => p.actif).length} actifs)');
       return items;
     });
   }
 
-  // ── Charger config globale (lecture réseau forcée) ───────────────────────
-  static Future<ConfigAbonnementGlobal> chargerGlobal() async {
-    try {
-      final doc = await _db.collection(_col).doc('global')
-          .get(const GetOptions(source: Source.server));
-      if (!doc.exists) return const ConfigAbonnementGlobal();
-      return ConfigAbonnementGlobal.fromMap(
-        Map<String, dynamic>.fromEntries(
-          doc.data()!.entries.map((e) => MapEntry(e.key.toString(), e.value)),
-        ),
-      );
-    } catch (e) {
-      debugPrint('[ConfigAbonnementService] chargerGlobal error: $e');
-      try {
-        final docCache = await _db.collection(_col).doc('global').get();
-        if (docCache.exists) {
-          return ConfigAbonnementGlobal.fromMap(
-            Map<String, dynamic>.fromEntries(
-              docCache.data()!.entries.map((e) => MapEntry(e.key.toString(), e.value)),
-            ),
-          );
-        }
-      } catch (_) {}
-      return const ConfigAbonnementGlobal();
-    }
-  }
-
-  // ── Stream config globale ────────────────────────────────────────────────
   static Stream<ConfigAbonnementGlobal> globalStream() {
-    return _db.collection(_col).doc('global').snapshots().map((doc) {
-      if (!doc.exists) return const ConfigAbonnementGlobal();
+    return _db
+        .collection(_col)
+        .doc('global')
+        .snapshots(includeMetadataChanges: false)
+        .where((doc) => !doc.metadata.isFromCache)
+        .map((doc) {
+      if (!doc.exists || doc.data() == null) return const ConfigAbonnementGlobal();
       try {
-        return ConfigAbonnementGlobal.fromMap(
-          Map<String, dynamic>.fromEntries(
-            doc.data()!.entries.map((e) => MapEntry(e.key.toString(), e.value)),
-          ),
-        );
+        return ConfigAbonnementGlobal.fromMap(_normaliserMap(doc.data()!));
       } catch (e) {
         debugPrint('[ConfigAbonnementService] globalStream parse ERROR: $e');
         return const ConfigAbonnementGlobal();
@@ -283,38 +220,44 @@ class ConfigAbonnementService {
     });
   }
 
-  // ── Sauvegarder tous les plans ───────────────────────────────────────────
+  // ── Lecture ponctuelle (utilisée par l'écran admin pour l'édition) ───────
+  static Future<List<PlanConfig>> chargerPlans() async {
+    try {
+      final doc = await _db.collection(_col).doc('plans').get();
+      if (!doc.exists || doc.data() == null) return [];
+      final items = _parseItems(doc.data()!['items']);
+      items.sort((a, b) => a.ordre.compareTo(b.ordre));
+      debugPrint('[ConfigAbonnementService] chargerPlans: ${items.length} plans');
+      return items;
+    } catch (e) {
+      debugPrint('[ConfigAbonnementService] chargerPlans ERROR: $e');
+      return [];
+    }
+  }
+
+  static Future<ConfigAbonnementGlobal> chargerGlobal() async {
+    try {
+      final doc = await _db.collection(_col).doc('global').get();
+      if (!doc.exists || doc.data() == null) return const ConfigAbonnementGlobal();
+      return ConfigAbonnementGlobal.fromMap(_normaliserMap(doc.data()!));
+    } catch (e) {
+      debugPrint('[ConfigAbonnementService] chargerGlobal ERROR: $e');
+      return const ConfigAbonnementGlobal();
+    }
+  }
+
+  // ── Sauvegarder ──────────────────────────────────────────────────────────
   static Future<void> sauvegarderPlans(List<PlanConfig> plans) async {
     await _db.collection(_col).doc('plans').set({
       'items': plans.map((p) => p.toMap()).toList(),
       'updated_at': FieldValue.serverTimestamp(),
     });
+    debugPrint('[ConfigAbonnementService] ${plans.length} plans sauvegardés');
   }
 
-  // ── Sauvegarder config globale ───────────────────────────────────────────
   static Future<void> sauvegarderGlobal(ConfigAbonnementGlobal config) async {
     await _db.collection(_col).doc('global').set(config.toMap());
-  }
-
-  // ── Initialiser avec les plans par défaut (UNIQUEMENT si vraiment absent) ─
-  // N'est plus appelé automatiquement pour éviter d'écraser les données admin.
-  static Future<void> initialiserSiAbsent() async {
-    try {
-      final doc = await _db.collection(_col).doc('plans')
-          .get(const GetOptions(source: Source.server));
-      if (!doc.exists) {
-        debugPrint('[ConfigAbonnementService] initialisation des plans par défaut');
-        await _db.collection(_col).doc('plans').set({
-          'items': kPlansParDefaut,
-          'updated_at': FieldValue.serverTimestamp(),
-        });
-        await _db.collection(_col).doc('global').set(
-          const ConfigAbonnementGlobal().toMap(),
-        );
-      }
-    } catch (e) {
-      debugPrint('[ConfigAbonnementService] initialiserSiAbsent error: $e');
-    }
+    debugPrint('[ConfigAbonnementService] config globale sauvegardée');
   }
 
   // ── Trouver le plan correspondant à un nombre de stands ──────────────────

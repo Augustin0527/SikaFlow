@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'firebase_options.dart';
 import 'theme/app_theme.dart';
@@ -23,6 +24,16 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
     if (kDebugMode) debugPrint('[SikaFlow] Firebase initialisé');
+
+    // ⚡ CRITIQUE : sur le Web, désactiver la persistance Firestore (cache local)
+    // pour que les données du super-admin apparaissent immédiatement sans cache.
+    if (kIsWeb) {
+      FirebaseFirestore.instance.settings = const Settings(
+        persistenceEnabled: false,
+        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+      );
+      if (kDebugMode) debugPrint('[SikaFlow] Firestore persistance désactivée (Web)');
+    }
   } on FirebaseException catch (e) {
     // App déjà initialisée (hot-reload)
     if (e.code != 'duplicate-app') {
