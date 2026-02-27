@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
 import '../models/plan_config_model.dart';
+import '../models/landing_config_model.dart';
 import '../router/app_router.dart';
 
 class LandingPage extends StatefulWidget {
@@ -31,7 +33,9 @@ class _LandingPageState extends State<LandingPage>
     essaiActif: true,
     messagePromo: '',
   );
-  bool _plansCharges = true; // Toujours true : on affiche immédiatement les plans statiques
+  bool _plansCharges = true;
+  // Config dynamique landing (hero, contact, témoignages, footer)
+  LandingConfig _landingConfig = LandingConfig.defaut();
 
   @override
   void initState() {
@@ -54,9 +58,8 @@ class _LandingPageState extends State<LandingPage>
     Future.delayed(const Duration(milliseconds: 400), () {
       if (mounted) _featuresController.forward();
     });
-    // Mise à jour silencieuse depuis Firestore APRÈS le premier affichage
-    // La landing s'affiche immédiatement avec les plans statiques
-    _mettreAJourPlansDepuisFirestore();
+    // Mise à jour silencieuse depuis Firestore
+    _mettreAJourDepuisFirestore();
   }
 
   // Plans statiques hardcodés — affichés IMMÉDIATEMENT, sans attendre Firebase
@@ -87,23 +90,35 @@ class _LandingPageState extends State<LandingPage>
   }
 
   // Mise à jour silencieuse depuis Firestore (n'affecte pas le rendu initial)
-  Future<void> _mettreAJourPlansDepuisFirestore() async {
+  Future<void> _mettreAJourDepuisFirestore() async {
     try {
-      // Délai pour laisser Firebase se charger en arrière-plan
-      await Future.delayed(const Duration(seconds: 3));
+      await Future.delayed(const Duration(seconds: 2));
       if (!mounted) return;
+
+      // Charger les plans d'abonnement
       final plans = await ConfigAbonnementService.chargerPlans();
       final cfg   = await ConfigAbonnementService.chargerGlobal();
+
+      // Charger la config landing dynamique
+      final landingDoc = await FirebaseFirestore.instance
+          .collection('config_landing')
+          .doc('main')
+          .get();
+
       if (!mounted) return;
-      final plansActifs = plans.where((p) => p.actif).toList();
-      if (plansActifs.isNotEmpty) {
-        setState(() {
+
+      setState(() {
+        final plansActifs = plans.where((p) => p.actif).toList();
+        if (plansActifs.isNotEmpty) {
           _plans = plansActifs;
           _cfg   = cfg;
-        });
-      }
+        }
+        if (landingDoc.exists) {
+          _landingConfig = LandingConfig.fromFirestore(landingDoc.data()!);
+        }
+      });
     } catch (_) {
-      // Silencieux : la page fonctionne déjà avec les données statiques
+      // Silencieux : la page fonctionne avec les données statiques
     }
   }
 
@@ -308,14 +323,14 @@ class _LandingPageState extends State<LandingPage>
             border: Border.all(
                 color: AppTheme.accentOrange.withValues(alpha: 0.4)),
           ),
-          child: const Row(
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.verified, color: AppTheme.accentOrange, size: 14),
-              SizedBox(width: 6),
+              const Icon(Icons.verified, color: AppTheme.accentOrange, size: 14),
+              const SizedBox(width: 6),
               Text(
-                'Système de gestion des opérations de Mobile Money',
-                style: TextStyle(
+                _landingConfig.hero.sousTitre,
+                style: const TextStyle(
                     color: AppTheme.accentOrange,
                     fontSize: 12,
                     fontWeight: FontWeight.w600),
@@ -324,9 +339,9 @@ class _LandingPageState extends State<LandingPage>
           ),
         ),
         const SizedBox(height: 24),
-        const Text(
-          'Gérez vos opérations\nMobile Money',
-          style: TextStyle(
+        Text(
+          _landingConfig.hero.titre,
+          style: const TextStyle(
             color: Colors.white,
             fontSize: 46,
             fontWeight: FontWeight.w900,
@@ -338,8 +353,8 @@ class _LandingPageState extends State<LandingPage>
         ShaderMask(
           shaderCallback: (bounds) =>
               AppTheme.accentGradient.createShader(bounds),
-          child: const Text(
-            'en toute simplicité',
+          child: Text(
+            _landingConfig.hero.titreSuite,
             style: TextStyle(
               color: Colors.white,
               fontSize: 46,
@@ -350,13 +365,9 @@ class _LandingPageState extends State<LandingPage>
           ),
         ),
         const SizedBox(height: 24),
-        const Text(
-          'Suivi en temps réel, gestion intelligente de vos agents\n'
-          'et rapports automatisés.\n\n'
-          'SikaFlow connecte vos agents de terrain et centralise\n'
-          'toutes vos opérations marchandes MTN, Moov et Celtiis\n'
-          'dans un tableau de bord unique, clair et sécurisé.',
-          style: TextStyle(
+        Text(
+          _landingConfig.hero.description,
+          style: const TextStyle(
             color: AppTheme.textSecondary,
             fontSize: 15,
             height: 1.7,
@@ -370,7 +381,7 @@ class _LandingPageState extends State<LandingPage>
             ElevatedButton.icon(
               onPressed: () => context.go(Routes.inscription),
               icon: const Icon(Icons.rocket_launch, size: 18),
-              label: const Text('Commencer Gratuitement'),
+              label: Text(_landingConfig.hero.ctaPrimaire),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.accentOrange,
                 foregroundColor: Colors.white,
@@ -388,7 +399,7 @@ class _LandingPageState extends State<LandingPage>
             OutlinedButton.icon(
               onPressed: () => context.go(Routes.connexion),
               icon: const Icon(Icons.login, size: 18),
-              label: const Text('Se Connecter'),
+              label: Text(_landingConfig.hero.ctaSecondaire),
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.white,
                 side: const BorderSide(
@@ -406,11 +417,11 @@ class _LandingPageState extends State<LandingPage>
         const SizedBox(height: 32),
         Row(
           children: [
-            _heroBadge(Icons.shield_outlined, '1 mois gratuit'),
+            _heroBadge(Icons.shield_outlined, _landingConfig.hero.badgeEssai),
             const SizedBox(width: 24),
-            _heroBadge(Icons.sync, 'Sync temps réel'),
+            _heroBadge(Icons.sync, _landingConfig.hero.badge2),
             const SizedBox(width: 24),
-            _heroBadge(Icons.lock_outline, 'Sécurisé'),
+            _heroBadge(Icons.lock_outline, _landingConfig.hero.badge3),
           ],
         ),
       ],
@@ -669,13 +680,10 @@ class _LandingPageState extends State<LandingPage>
         runSpacing: 16,
         spacing: 32,
         children: [
-          _statItem('3', 'Opérateurs couverts'),
-          _dividerStat(),
-          _statItem('30 jours', 'Essai gratuit'),
-          _dividerStat(),
-          _statItem('100%', 'Données privées'),
-          _dividerStat(),
-          _statItem('99.9%', 'Disponibilité'),
+          for (int i = 0; i < _landingConfig.stats.length; i++) ...[
+            if (i > 0) _dividerStat(),
+            _statItem(_landingConfig.stats[i].valeur, _landingConfig.stats[i].label),
+          ],
         ],
       ),
     );
@@ -1902,32 +1910,19 @@ class _LandingPageState extends State<LandingPage>
   // TÉMOIGNAGES SECTION
   // ════════════════════════════════════════════════════════════════════════════
   Widget _buildTemoignagesSection(bool isWide) {
-    final temoignages = [
-      _TemoignageData(
-        nom: 'Adjoua Fatima K.',
-        role: 'Gestionnaire Mobile Money',
-        ville: 'Cotonou',
-        texte: 'SikaFlow a transformé ma façon de gérer mes agents. Je vois en temps réel les soldes de chacun, et mes ristournes sont calculées automatiquement. Je gagne 2 heures par jour !',
-        photoUrl: 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=120&h=120&fit=crop&crop=face',
-        note: 5,
-      ),
-      _TemoignageData(
-        nom: 'Kofi Mensah',
-        role: 'Agent Mobile Money',
-        ville: 'Porto-Novo',
-        texte: 'Avant je notais tout dans un cahier. Maintenant je soumets mon point journalier en 2 minutes depuis mon téléphone. Mon gestionnaire valide rapidement et tout est enregistré.',
-        photoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&h=120&fit=crop&crop=face',
-        note: 5,
-      ),
-      _TemoignageData(
-        nom: 'Aïssatou Diallo',
-        role: 'Contrôleure de zone',
-        ville: 'Parakou',
-        texte: 'Je supervise 8 agents. SikaFlow me donne une vue claire sur chaque opérateur. Les rapports sont automatiques, je peux me concentrer sur le terrain.',
-        photoUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=120&h=120&fit=crop&crop=face',
-        note: 5,
-      ),
-    ];
+    // Utiliser les témoignages depuis Firestore, filtrés (actifs)
+    final temoignages = _landingConfig.temoignages.where((t) => t.actif).toList();
+    if (temoignages.isEmpty) return const SizedBox.shrink();
+
+    // Convertir TemoignageConfig → _TemoignageData pour réutiliser le widget existant
+    final items = temoignages.map((t) => _TemoignageData(
+      nom: t.nom,
+      role: t.role,
+      ville: t.ville,
+      texte: t.texte,
+      photoUrl: t.photoUrl,
+      note: t.etoiles,
+    )).toList();
 
     return Container(
       color: const Color(0xFF0D1221),
@@ -1943,7 +1938,7 @@ class _LandingPageState extends State<LandingPage>
           isWide
               ? Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: temoignages
+                  children: items
                       .map((t) => Expanded(
                             child: Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -1953,7 +1948,7 @@ class _LandingPageState extends State<LandingPage>
                       .toList(),
                 )
               : Column(
-                  children: temoignages
+                  children: items
                       .map((t) => Padding(
                             padding: const EdgeInsets.only(bottom: 16),
                             child: _carteTemoignage(t),
@@ -2061,9 +2056,9 @@ class _LandingPageState extends State<LandingPage>
       ),
       child: Column(
         children: [
-          const Text(
-            'Prêt à digitaliser votre\nMobile Money ?',
-            style: TextStyle(
+          Text(
+            _landingConfig.cta.titre,
+            style: const TextStyle(
               color: Colors.white,
               fontSize: 32,
               fontWeight: FontWeight.w900,
@@ -2072,9 +2067,9 @@ class _LandingPageState extends State<LandingPage>
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
-          const Text(
-            'Rejoignez des centaines d\'agences Mobile Money au Bénin\nqui font confiance à SikaFlow.',
-            style: TextStyle(
+          Text(
+            _landingConfig.cta.description,
+            style: const TextStyle(
                 color: Colors.white70, fontSize: 15, height: 1.6),
             textAlign: TextAlign.center,
           ),
@@ -2087,7 +2082,7 @@ class _LandingPageState extends State<LandingPage>
               ElevatedButton.icon(
                 onPressed: () => context.go(Routes.inscription),
                 icon: const Icon(Icons.rocket_launch, size: 18),
-                label: const Text('Créer mon compte'),
+                label: Text(_landingConfig.cta.btnPrimaire),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.white,
                   foregroundColor: AppTheme.accentOrange,
@@ -2102,7 +2097,7 @@ class _LandingPageState extends State<LandingPage>
               OutlinedButton.icon(
                 onPressed: () => context.go(Routes.connexion),
                 icon: const Icon(Icons.login),
-                label: const Text('Me connecter'),
+                label: Text(_landingConfig.cta.btnSecondaire),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.white,
                   side:
@@ -2171,10 +2166,10 @@ class _LandingPageState extends State<LandingPage>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  '© 2025 SikaFlow — GFPEANC. Tous droits réservés. Solution Mobile Money Bénin.',
-                  style: TextStyle(color: AppTheme.textHint, fontSize: 13),
+                  _landingConfig.contact.copyrightTexte,
+                  style: const TextStyle(color: AppTheme.textHint, fontSize: 13),
                 ),
               ),
               // Lien discret vers l'espace admin
@@ -2232,15 +2227,15 @@ class _LandingPageState extends State<LandingPage>
           ],
         ),
         const SizedBox(height: 14),
-        const Text(
-          'Système de gestion des opérations\nMobile Money au Bénin.',
-          style: TextStyle(
+        Text(
+          _landingConfig.contact.sloganFooter,
+          style: const TextStyle(
               color: AppTheme.textSecondary, fontSize: 13, height: 1.6),
         ),
         const SizedBox(height: 16),
         Row(
           children: [
-            _socialIcon(Icons.language, 'sikaflow.org'),
+            _socialIcon(Icons.language, _landingConfig.contact.siteWeb),
           ],
         ),
       ],
@@ -2286,16 +2281,16 @@ class _LandingPageState extends State<LandingPage>
                 fontWeight: FontWeight.bold,
                 fontSize: 14)),
         const SizedBox(height: 14),
-        _contactRowCliquable(Icons.email_outlined, 'contact@sikaflow.org',
-            () => _lancerUrl('mailto:contact@sikaflow.org')),
+        _contactRowCliquable(Icons.email_outlined, _landingConfig.contact.email,
+            () => _lancerUrl('mailto:${_landingConfig.contact.email}')),
         const SizedBox(height: 8),
-        _contactRowCliquable(Icons.phone_outlined, '+229 01 XX XX XX XX',
-            () => _lancerUrl('tel:+22901XXXXXXXX')),
+        _contactRowCliquable(Icons.phone_outlined, _landingConfig.contact.telephone,
+            () => _lancerUrl('tel:${_landingConfig.contact.telephone.replaceAll(' ', '')}')),
         const SizedBox(height: 8),
-        _contactRowCliquable(Icons.location_on_outlined, 'Cotonou, Bénin', null),
+        _contactRowCliquable(Icons.location_on_outlined, '${_landingConfig.contact.ville}, ${_landingConfig.contact.pays}', null),
         const SizedBox(height: 8),
-        _contactRowCliquable(Icons.web, 'sikaflow-c8869.web.app',
-            () => _lancerUrl('https://sikaflow-c8869.web.app')),
+        _contactRowCliquable(Icons.web, _landingConfig.contact.siteWeb,
+            () => _lancerUrl('https://${_landingConfig.contact.siteWeb}')),
       ],
     );
   }
@@ -2352,11 +2347,11 @@ class _LandingPageState extends State<LandingPage>
             const Text('Notre équipe est disponible pour vous aider.',
                 style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
             const SizedBox(height: 24),
-            _boutonContact(Icons.email_rounded, 'Email', 'contact@sikaflow.org',
-                () => _lancerUrl('mailto:contact@sikaflow.org?subject=Contact SikaFlow')),
+            _boutonContact(Icons.email_rounded, 'Email', _landingConfig.contact.email,
+                () => _lancerUrl('mailto:${_landingConfig.contact.email}?subject=Contact SikaFlow')),
             const SizedBox(height: 12),
-            _boutonContact(Icons.chat_rounded, 'WhatsApp', '+229 01 XX XX XX',
-                () => _lancerUrl('https://wa.me/22901XXXXXXXX?text=Bonjour, je vous contacte depuis SikaFlow')),
+            _boutonContact(Icons.chat_rounded, 'WhatsApp', _landingConfig.contact.whatsapp,
+                () => _lancerUrl('https://wa.me/${_landingConfig.contact.whatsapp.replaceAll(RegExp(r'[^0-9]'), '')}?text=Bonjour, je vous contacte depuis SikaFlow')),
             const SizedBox(height: 24),
           ],
         ),
@@ -2533,20 +2528,20 @@ class _LandingPageState extends State<LandingPage>
         const Text('3. Confidentialité des données',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
         const SizedBox(height: 6),
-        const Text('Vos données sont hébergées sur Google Firebase. GFPEANC ne revend aucune donnée personnelle. Vous restez propriétaire de vos données.',
-            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5)),
+        Text('Vos données sont hébergées sur Google Firebase. SikaFlow ne revend aucune donnée personnelle. Vous restez propriétaire de vos données.',
+            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5)),
         const SizedBox(height: 16),
         const Text('4. Responsabilité',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
         const SizedBox(height: 6),
-        const Text('SikaFlow est un outil de gestion. GFPEANC n\'est pas responsable des décisions financières prises sur la base des données affichées.',
-            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5)),
+        Text('SikaFlow est un outil de gestion. L\'éditeur n\'est pas responsable des décisions financières prises sur la base des données affichées.',
+            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5)),
         const SizedBox(height: 16),
         const Text('5. Contact',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
         const SizedBox(height: 6),
-        const Text('Pour toute question : contact@sikaflow.org — Cotonou, Bénin.',
-            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5)),
+        Text('Pour toute question : ${_landingConfig.contact.email} — ${_landingConfig.contact.ville}, ${_landingConfig.contact.pays}.',
+            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.5)),
       ],
     );
   }
