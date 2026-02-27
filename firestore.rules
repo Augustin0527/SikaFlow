@@ -1,27 +1,74 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // OTP verifications — accessible sans authentification (inscription)
+
+    // ── Fonctions utilitaires ─────────────────────────────────────────────
+    function estAuthentifie() {
+      return request.auth != null;
+    }
+
+    function estSuperAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super_admin';
+    }
+
+    function estGestionnaire() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'gestionnaire';
+    }
+
+    function estMembreDeLEntreprise(entrepriseId) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.entreprise_id == entrepriseId;
+    }
+
+    // ── OTP verifications — accessible sans authentification (inscription) ──
     match /otp_verifications/{email} {
       allow read, write: if true;
     }
-    
-    // Users — lecture/écriture par utilisateur authentifié
+
+    // ── Users — lecture par tout utilisateur authentifié, écriture par soi-même ou super_admin ──
     match /users/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read: if estAuthentifie();
+      allow write: if estAuthentifie() && (request.auth.uid == userId || estSuperAdmin());
     }
-    
-    // Entreprises — gestionnaire authentifié
+
+    // ── Entreprises — lecture/écriture par membres ou super_admin ──────────
     match /entreprises/{entrepriseId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read: if estAuthentifie();
+      allow write: if estAuthentifie();
+
+      // Sous-collections de l'entreprise
+      match /{subcollection}/{docId} {
+        allow read, write: if estAuthentifie();
+      }
     }
-    
-    // Toutes les autres collections — authentification requise
+
+    // ── Configuration des abonnements — lecture publique (auth), écriture super_admin uniquement ──
+    match /config_abonnement/{docId} {
+      allow read: if estAuthentifie();
+      allow write: if estSuperAdmin();
+    }
+
+    // ── Abonnements — gestion par super_admin ou gestionnaire concerné ─────
+    match /abonnements/{abonnementId} {
+      allow read: if estAuthentifie();
+      allow write: if estAuthentifie();
+    }
+
+    // ── Transactions / Paiements — super_admin ou gestionnaire ────────────
+    match /transactions/{transactionId} {
+      allow read: if estAuthentifie();
+      allow write: if estAuthentifie();
+    }
+
+    // ── Toutes les autres collections — authentification requise ───────────
+    // Note : {document=**} couvre TOUS les niveaux de hiérarchie
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if estAuthentifie();
     }
   }
 }
