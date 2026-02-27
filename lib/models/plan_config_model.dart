@@ -152,7 +152,11 @@ const List<Map<String, dynamic>> kPlansParDefaut = [
 
 // ── Service Firestore pour la config ───────────────────────────────────────
 class ConfigAbonnementService {
-  static final _db = FirebaseFirestore.instance;
+  // ⚠️ NE PAS utiliser static final _db = FirebaseFirestore.instance ici !
+  // Les champs statiques sont initialisés lors de la première référence à la classe,
+  // ce qui peut se produire AVANT Firebase.initializeApp() sur Web.
+  // On utilise un getter lazy pour s'assurer que Firebase est prêt.
+  static FirebaseFirestore get _db => FirebaseFirestore.instance;
   static const _col = 'config_abonnement';
 
   // ── Charger tous les plans ───────────────────────────────────────────────

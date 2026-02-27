@@ -45,8 +45,15 @@ class AppProvider extends ChangeNotifier {
   bool             get chargement           => _chargement;
   bool             get estConnecte          => _utilisateurConnecte != null;
   String?          get erreur               => _erreur;
-  // Retourne true si l'email Firebase est v\u00e9rifi\u00e9
-  bool             get emailVerifie         => _auth.currentUser?.emailVerified ?? false;
+  // Retourne true si l'email Firebase est vérifié
+  // Vérification sécurisée : _auth peut ne pas être encore initialisé
+  bool get emailVerifie {
+    try {
+      return _auth.currentUser?.emailVerified ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
 
   List<UserModel>            get membres          => List.unmodifiable(_membres);
   List<StandModel>           get stands           => List.unmodifiable(_stands);

@@ -14,32 +14,66 @@ import 'screens/agent/agent_dashboard.dart';
 import 'screens/controleur/controleur_dashboard.dart';
 import 'screens/admin/admin_dashboard.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+/// Initialise Firebase avec retry robuste.
+/// Sur Web, firebase_core_web charge les scripts JS via dynamic import().
+/// Cela peut prendre quelques secondes selon la connexion.
+Future<void> _initFirebase() async {
+  // Si déjà initialisé (hot-reload), on retourne directement
+  if (Firebase.apps.isNotEmpty) return;
 
-  // Initialiser Firebase — OBLIGATOIRE avant runApp
-  // On attend que ce soit terminé avant toute chose
+  // Tentative 1
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    if (kDebugMode) debugPrint('[SikaFlow] Firebase initialisé');
+    if (kDebugMode) debugPrint('[SikaFlow] ✅ Firebase initialisé (tentative 1)');
+    return;
   } on FirebaseException catch (e) {
-    // App déjà initialisée (hot-reload) — pas grave
-    if (e.code != 'duplicate-app') {
-      if (kDebugMode) debugPrint('[SikaFlow] FirebaseException: ${e.code} - ${e.message}');
-    }
+    if (e.code == 'duplicate-app') return; // déjà initialisé
+    if (kDebugMode) debugPrint('[SikaFlow] FirebaseException T1: ${e.code}');
   } catch (e) {
-    if (kDebugMode) debugPrint('[SikaFlow] Firebase erreur: $e');
-    // Attendre 2s et réessayer une fois
-    await Future.delayed(const Duration(seconds: 2));
-    try {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-    } catch (_) {}
+    if (kDebugMode) debugPrint('[SikaFlow] Erreur T1: $e');
   }
 
+  // Attendre que les scripts Firebase JS finissent de charger (Web uniquement)
+  await Future.delayed(const Duration(milliseconds: 1500));
+
+  // Tentative 2
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    if (kDebugMode) debugPrint('[SikaFlow] ✅ Firebase initialisé (tentative 2)');
+    return;
+  } on FirebaseException catch (e) {
+    if (e.code == 'duplicate-app') return;
+    if (kDebugMode) debugPrint('[SikaFlow] FirebaseException T2: ${e.code}');
+  } catch (e) {
+    if (kDebugMode) debugPrint('[SikaFlow] Erreur T2: $e');
+  }
+
+  // Attendre encore
+  await Future.delayed(const Duration(seconds: 2));
+
+  // Tentative 3 (dernière chance)
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    if (kDebugMode) debugPrint('[SikaFlow] ✅ Firebase initialisé (tentative 3)');
+  } on FirebaseException catch (e) {
+    if (e.code == 'duplicate-app') return;
+    if (kDebugMode) debugPrint('[SikaFlow] ❌ Firebase T3 échoué: ${e.code}');
+    rethrow;
+  } catch (e) {
+    if (kDebugMode) debugPrint('[SikaFlow] ❌ Firebase T3 erreur: $e');
+    rethrow;
+  }
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await _initFirebase();
   runApp(const SikaFlowApp());
 }
 
