@@ -69,23 +69,7 @@
   </div>
 
   <script>
-    // ── Purge service worker + cache (version v4) ──
-    var SW_VERSION = 'v4';
-    var swPurged = sessionStorage.getItem('sw_purged');
-    if (swPurged !== SW_VERSION && 'serviceWorker' in navigator) {
-      sessionStorage.setItem('sw_purged', SW_VERSION);
-      Promise.all([
-        navigator.serviceWorker.getRegistrations().then(function(regs) {
-          return Promise.all(regs.map(function(r) { return r.unregister(); }));
-        }),
-        window.caches ? caches.keys().then(function(keys) {
-          return Promise.all(keys.map(function(k) { return caches.delete(k); }));
-        }) : Promise.resolve()
-      ]).then(function() {
-        window.location.replace(window.location.href.split('?')[0] + '?r=' + Date.now());
-      }).catch(function() {});
-    }
-
+    // Masquer l'écran de chargement HTML quand Flutter est prêt
     window.addEventListener('flutter-first-frame', function() {
       var loading = document.getElementById('loading');
       if (loading) {
