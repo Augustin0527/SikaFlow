@@ -117,6 +117,17 @@ class _SplashScreenState extends State<_SplashScreen>
     _pulse = Tween<double>(begin: 0.96, end: 1.04).animate(
       CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
     );
+
+    // Double sécurité UI : forcer fin chargement après 8s max
+    Future.delayed(const Duration(seconds: 8), () {
+      if (mounted) {
+        final provider = context.read<AppProvider>();
+        if (provider.chargement) {
+          debugPrint('[SplashScreen] ⏰ Timeout UI 8s — forcer fin chargement');
+          provider.forcerFinChargement();
+        }
+      }
+    });
   }
 
   @override

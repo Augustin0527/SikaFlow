@@ -73,47 +73,67 @@ class AppProvider extends ChangeNotifier {
   Future<void> initialiser() async {
     _setChargement(true);
 
-    // Charger la config des plans en parallèle (pas bloquant)
-    chargerPlansConfig();
+    // ── Timer de sécurité absolu : dans TOUS les cas, fin dans 10s ────────
+    Timer(const Duration(seconds: 10), () {
+      if (_chargement) {
+        debugPrint('[AppProvider] ⏰ Timer sécurité 10s déclenché');
+        _chargement = false;
+        notifyListeners();
+      }
+    });
 
     try {
-      // Attendre le premier événement authStateChanges avec timeout 4s
-      final completer = Completer<User?>();
+      // Vérifier si l'utilisateur est déjà connu IMMÉDIATEMENT (currentUser)
+      // Firebase Web conserve la session dans IndexedDB — currentUser est
+      // disponible après initializeApp sans attendre authStateChanges
+      final currentUser = _auth.currentUser;
 
-      StreamSubscription<User?>? sub;
-      sub = _auth.authStateChanges().listen((user) {
-        if (!completer.isCompleted) completer.complete(user);
-      }, onError: (e) {
-        debugPrint('[AppProvider] authStateChanges error: $e');
-        if (!completer.isCompleted) completer.complete(null);
+      if (currentUser != null) {
+        // Utilisateur déjà connecté → charger son profil
+        await _chargerProfilFirebase(currentUser.uid);
+      } else {
+        // Pas d'utilisateur connu → attendre authStateChanges max 6s
+        final completer = Completer<User?>();
+        StreamSubscription<User?>? sub;
+        sub = _auth.authStateChanges().listen((user) {
+          if (!completer.isCompleted) completer.complete(user);
+        }, onError: (e) {
+          debugPrint('[AppProvider] authStateChanges error: $e');
+          if (!completer.isCompleted) completer.complete(null);
+        });
+
+        User? firebaseUser;
+        try {
+          firebaseUser = await completer.future
+              .timeout(const Duration(seconds: 6), onTimeout: () => null);
+        } catch (_) {
+          firebaseUser = null;
+        }
+        await sub.cancel();
+
+        if (firebaseUser != null) {
+          await _chargerProfilFirebase(firebaseUser.uid);
+        } else {
+          _viderEtat(); // _chargement = false + notifyListeners()
+        }
+      }
+
+      // Charger les plans (non bloquant, erreurs silencieuses)
+      unawaited(chargerPlansConfig());
+
+      // Écouter les changements d'auth ultérieurs
+      _auth.authStateChanges().listen((User? u) async {
+        if (u == null) {
+          _viderEtat();
+        } else if (u.uid != _utilisateurConnecte?.id) {
+          await _chargerProfilFirebase(u.uid);
+        }
       });
 
-      User? firebaseUser;
-      try {
-        firebaseUser = await completer.future
-            .timeout(const Duration(seconds: 4), onTimeout: () => null);
-      } catch (_) {
-        firebaseUser = null;
-      }
-      await sub.cancel();
-
-      if (firebaseUser == null) {
-        _viderEtat(); // _chargement = false + notifyListeners() inclus
-      } else {
-        await _chargerProfilFirebase(firebaseUser.uid);
-        // Écouter les changements d'auth après init
-        _auth.authStateChanges().listen((User? u) async {
-          if (u == null) {
-            _viderEtat();
-          } else if (u.uid != _utilisateurConnecte?.id) {
-            await _chargerProfilFirebase(u.uid);
-          }
-        });
-      }
     } catch (e) {
       debugPrint('[AppProvider] initialiser error: $e');
-      // Garantir que le chargement se termine même en cas d'erreur
-      _viderEtat();
+      _chargement = false;
+      notifyListeners();
     }
   }
 
@@ -132,12 +152,19 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Plans config (chargés au démarrage, streamés en temps réel) ───────────
+  /// Appelé par le splash screen si chargement > 12s (filet de sécurité)
+  void forcerFinChargement() {
+    _chargement = false;
+    notifyListeners();
+  }
+
+  // ── Plans config ─────────────────────────────────────────────────────────
   Future<void> chargerPlansConfig() async {
     try {
-      // Chargement initial
-      _plansConfig  = await ConfigAbonnementService.chargerPlans();
-      _configGlobal = await ConfigAbonnementService.chargerGlobal();
+      _plansConfig  = await ConfigAbonnementService.chargerPlans()
+          .timeout(const Duration(seconds: 10), onTimeout: () => []);
+      _configGlobal = await ConfigAbonnementService.chargerGlobal()
+          .timeout(const Duration(seconds: 10), onTimeout: () => const ConfigAbonnementGlobal());
       notifyListeners();
       // Stream en temps réel
       await _plansSub?.cancel();
