@@ -14,68 +14,77 @@ import 'screens/agent/agent_dashboard.dart';
 import 'screens/controleur/controleur_dashboard.dart';
 import 'screens/admin/admin_dashboard.dart';
 
-/// Initialise Firebase avec retry robuste.
-/// Sur Web, firebase_core_web charge les scripts JS via dynamic import().
-/// Cela peut prendre quelques secondes selon la connexion.
-Future<void> _initFirebase() async {
-  // Si déjà initialisé (hot-reload), on retourne directement
-  if (Firebase.apps.isNotEmpty) return;
+// ─────────────────────────────────────────────────────────────────────────────
+// Point d'entrée
+// Architecture : Firebase est initialisé AVANT runApp().
+// Cela garantit que firebase_core_web a fini de charger les scripts JS
+// depuis gstatic.com avant que AppProvider ne soit créé.
+// ─────────────────────────────────────────────────────────────────────────────
 
-  // Tentative 1
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    if (kDebugMode) debugPrint('[SikaFlow] ✅ Firebase initialisé (tentative 1)');
-    return;
-  } on FirebaseException catch (e) {
-    if (e.code == 'duplicate-app') return; // déjà initialisé
-    if (kDebugMode) debugPrint('[SikaFlow] FirebaseException T1: ${e.code}');
-  } catch (e) {
-    if (kDebugMode) debugPrint('[SikaFlow] Erreur T1: $e');
-  }
-
-  // Attendre que les scripts Firebase JS finissent de charger (Web uniquement)
-  await Future.delayed(const Duration(milliseconds: 1500));
-
-  // Tentative 2
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    if (kDebugMode) debugPrint('[SikaFlow] ✅ Firebase initialisé (tentative 2)');
-    return;
-  } on FirebaseException catch (e) {
-    if (e.code == 'duplicate-app') return;
-    if (kDebugMode) debugPrint('[SikaFlow] FirebaseException T2: ${e.code}');
-  } catch (e) {
-    if (kDebugMode) debugPrint('[SikaFlow] Erreur T2: $e');
-  }
-
-  // Attendre encore
-  await Future.delayed(const Duration(seconds: 2));
-
-  // Tentative 3 (dernière chance)
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    if (kDebugMode) debugPrint('[SikaFlow] ✅ Firebase initialisé (tentative 3)');
-  } on FirebaseException catch (e) {
-    if (e.code == 'duplicate-app') return;
-    if (kDebugMode) debugPrint('[SikaFlow] ❌ Firebase T3 échoué: ${e.code}');
-    rethrow;
-  } catch (e) {
-    if (kDebugMode) debugPrint('[SikaFlow] ❌ Firebase T3 erreur: $e');
-    rethrow;
-  }
-}
-
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await _initFirebase();
+
+  // Initialiser Firebase avec retry (le chargement JS peut prendre 1-3s sur Web)
+  await _initFirebaseAvecRetry();
+
   runApp(const SikaFlowApp());
 }
+
+/// Tente d'initialiser Firebase jusqu'à 3 fois avec délais progressifs.
+/// Sur Web, firebase_core_web charge les scripts via dynamic import()
+/// ce qui peut prendre quelques secondes sur connexion lente.
+Future<void> _initFirebaseAvecRetry() async {
+  // Déjà initialisé (hot-reload Flutter dev) → on sort immédiatement
+  if (Firebase.apps.isNotEmpty) {
+    if (kDebugMode) debugPrint('[SikaFlow] Firebase déjà initialisé');
+    return;
+  }
+
+  final options = DefaultFirebaseOptions.currentPlatform;
+
+  for (int tentative = 1; tentative <= 3; tentative++) {
+    try {
+      await Firebase.initializeApp(options: options);
+      if (kDebugMode) {
+        debugPrint('[SikaFlow] ✅ Firebase initialisé (tentative $tentative)');
+      }
+      return; // Succès → on sort
+    } on FirebaseException catch (e) {
+      if (e.code == 'duplicate-app') {
+        if (kDebugMode) debugPrint('[SikaFlow] Firebase déjà initialisé (duplicate-app)');
+        return; // C'est OK
+      }
+      if (kDebugMode) {
+        debugPrint('[SikaFlow] ⚠️ FirebaseException T$tentative: ${e.code} - ${e.message}');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[SikaFlow] ⚠️ Erreur T$tentative: $e');
+      }
+    }
+
+    // Délai avant retry (0ms pour T1→T2, 2s pour T2→T3)
+    if (tentative < 3) {
+      final delai = tentative == 1
+          ? const Duration(milliseconds: 1500)
+          : const Duration(seconds: 2);
+      if (kDebugMode) {
+        debugPrint('[SikaFlow] ⏳ Attente ${delai.inMilliseconds}ms avant tentative ${tentative + 1}...');
+      }
+      await Future.delayed(delai);
+    }
+  }
+
+  // Si les 3 tentatives échouent, on lance quand même l'app
+  // AppProvider gèrera l'erreur proprement
+  if (kDebugMode) {
+    debugPrint('[SikaFlow] ❌ Firebase non initialisé après 3 tentatives — app lancée quand même');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Application principale
+// ─────────────────────────────────────────────────────────────────────────────
 
 class SikaFlowApp extends StatelessWidget {
   const SikaFlowApp({super.key});
@@ -83,6 +92,9 @@ class SikaFlowApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
+      // AppProvider est créé ICI, APRÈS Firebase.initializeApp() dans main()
+      // donc _auth = FirebaseAuth.instance et _db = FirebaseFirestore.instance
+      // sont toujours sûrs à appeler.
       create: (_) => AppProvider()..initialiser(),
       child: MaterialApp(
         title: 'SikaFlow',
@@ -94,6 +106,10 @@ class SikaFlowApp extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Routeur principal
+// ─────────────────────────────────────────────────────────────────────────────
+
 class AppRouter extends StatelessWidget {
   const AppRouter({super.key});
 
@@ -101,19 +117,19 @@ class AppRouter extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<AppProvider>(
       builder: (ctx, provider, _) {
-        // Splash de chargement
+        // Chargement en cours → splash
         if (provider.chargement) {
           return const _SplashScreen();
         }
 
-        // Non connecté → LandingPage
+        // Non connecté → LandingPage avec les plans
         if (!provider.estConnecte) {
           return const LandingPage();
         }
 
         final user = provider.utilisateurConnecte!;
 
-        // Mot de passe provisoire
+        // Mot de passe provisoire → forcer changement
         if (user.motDePasseProvisoire) {
           return const ChangerMotDePasseScreen(obligatoire: true);
         }
@@ -135,6 +151,10 @@ class AppRouter extends StatelessWidget {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Splash screen animé
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _SplashScreen extends StatefulWidget {
   const _SplashScreen();

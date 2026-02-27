@@ -23,7 +23,9 @@ class AppProvider extends ChangeNotifier {
   UserModel?       _utilisateurConnecte;
   EntrepriseModel? _entrepriseActive;
   StandModel?      _standActuel; // stand de l'agent connecté
-  bool   _chargement = false;
+  // ⚠️ IMPORTANT : _chargement démarre à TRUE pour que le SplashScreen
+  // s'affiche immédiatement dès la création du Provider (avant initialiser()).
+  bool   _chargement = true;
   String? _erreur;
 
   // ── Listes ────────────────────────────────────────────────────────────────
@@ -79,10 +81,11 @@ class AppProvider extends ChangeNotifier {
 
   // ── Initialisation ────────────────────────────────────────────────────────
   Future<void> initialiser() async {
-    // NE PAS notifier ici — évite un rebuild prématuré
-    _chargement = true;
+    // _chargement est déjà true depuis la construction (voir déclaration).
+    // On notifie pour forcer un premier rebuild qui affiche le splash.
+    notifyListeners();
 
-    // Instances Firebase — créées après Firebase.initializeApp()
+    // Instances Firebase — créées après Firebase.initializeApp() dans main()
     _auth = FirebaseAuth.instance;
     _db   = FirebaseFirestore.instance;
 
