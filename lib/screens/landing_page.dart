@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
@@ -26,6 +27,10 @@ class _LandingPageState extends State<LandingPage>
   ConfigAbonnementGlobal  _cfg    = const ConfigAbonnementGlobal();
   bool _plansCharges = false;
 
+  // Streams Firestore pour mises à jour en temps réel
+  StreamSubscription<List<PlanConfig>>?        _plansStreamSub;
+  StreamSubscription<ConfigAbonnementGlobal>?  _cfgStreamSub;
+
   @override
   void initState() {
     super.initState();
@@ -47,22 +52,49 @@ class _LandingPageState extends State<LandingPage>
     Future.delayed(const Duration(milliseconds: 400), () {
       if (mounted) _featuresController.forward();
     });
-    // Charger les plans dynamiques depuis Firestore
-    _chargerPlans();
+    // Écouter les plans et la config en temps réel via Firestore streams
+    _ecouterFirestore();
+  }
+
+  void _ecouterFirestore() {
+    // Stream des plans — se met à jour automatiquement dès qu'un admin modifie
+    _plansStreamSub = ConfigAbonnementService.plansStream().listen((plans) {
+      if (mounted) {
+        setState(() {
+          _plans        = plans.where((p) => p.actif).toList();
+          _plansCharges = true;
+        });
+      }
+    }, onError: (e) {
+      debugPrint('[LandingPage] plansStream error: $e');
+      // Fallback: chargement ponctuel
+      _chargerPlans();
+    });
+
+    // Stream de la config globale — remise, durée essai, message promo
+    _cfgStreamSub = ConfigAbonnementService.globalStream().listen((cfg) {
+      if (mounted) { setState(() => _cfg = cfg); }
+    }, onError: (e) {
+      debugPrint('[LandingPage] globalStream error: $e');
+    });
   }
 
   Future<void> _chargerPlans() async {
     final plans = await ConfigAbonnementService.chargerPlans();
     final cfg   = await ConfigAbonnementService.chargerGlobal();
-    if (mounted) setState(() {
-      _plans        = plans.where((p) => p.actif).toList();
-      _cfg          = cfg;
-      _plansCharges = true;
-    });
+    if (mounted) {
+      setState(() {
+        _plans        = plans.where((p) => p.actif).toList();
+        _cfg          = cfg;
+        _plansCharges = true;
+      });
+    }
   }
 
   @override
   void dispose() {
+    _plansStreamSub?.cancel();
+    _cfgStreamSub?.cancel();
     _heroController.dispose();
     _featuresController.dispose();
     _scrollController.dispose();
@@ -371,7 +403,7 @@ class _LandingPageState extends State<LandingPage>
         const SizedBox(height: 32),
         Row(
           children: [
-            _heroBadge(Icons.shield_outlined, '1 mois gratuit'),
+            _heroBadge(Icons.shield_outlined, '${_cfg.dureeEssaiJours} jours gratuits'),
             const SizedBox(width: 24),
             _heroBadge(Icons.sync, 'Sync temps réel'),
             const SizedBox(width: 24),
@@ -636,7 +668,7 @@ class _LandingPageState extends State<LandingPage>
         children: [
           _statItem('3', 'Opérateurs couverts'),
           _dividerStat(),
-          _statItem('30 jours', 'Essai gratuit'),
+          _statItem('${_cfg.dureeEssaiJours} jours', 'Essai gratuit'),
           _dividerStat(),
           _statItem('100%', 'Données privées'),
           _dividerStat(),
@@ -1075,9 +1107,7 @@ class _LandingPageState extends State<LandingPage>
     final pct     = (remise * 100).round();
     final essaiJ  = _cfg.dureeEssaiJours;
 
-    return StatefulBuilder(
-      builder: (ctx, setS) {
-        return Container(
+    return Container(
           color: AppTheme.cardDarker,
           padding: EdgeInsets.symmetric(
               horizontal: isWide ? 80 : 24, vertical: 80),
@@ -1102,14 +1132,12 @@ class _LandingPageState extends State<LandingPage>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     _periodeBtn('Mensuel', !_periodeAnnuelle, () {
-                      setS(() => _periodeAnnuelle = false);
                       setState(() => _periodeAnnuelle = false);
                     }),
                     _periodeBtn(
                       pct > 0 ? 'Annuel  −$pct%' : 'Annuel',
                       _periodeAnnuelle,
                       () {
-                        setS(() => _periodeAnnuelle = true);
                         setState(() => _periodeAnnuelle = true);
                       },
                       badge: pct > 0,
@@ -1205,8 +1233,6 @@ class _LandingPageState extends State<LandingPage>
             ],
           ),
         );
-      },
-    );
   }
 
   Widget _periodeBtn(String label, bool selected, VoidCallback onTap,
@@ -1263,9 +1289,9 @@ class _LandingPageState extends State<LandingPage>
               const Icon(Icons.timer_outlined,
                   color: AppTheme.textHint, size: 18),
               const SizedBox(width: 6),
-              const Text('30 jours',
+              Text('${_cfg.dureeEssaiJours} jours',
                   style:
-                      TextStyle(color: AppTheme.textHint, fontSize: 13)),
+                      const TextStyle(color: AppTheme.textHint, fontSize: 13)),
             ],
           ),
           const SizedBox(height: 16),
