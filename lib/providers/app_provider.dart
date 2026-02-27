@@ -70,71 +70,91 @@ class AppProvider extends ChangeNotifier {
   List<StandModel> get standsActifs => _stands.where((s) => s.actif).toList();
 
   // ── Initialisation ────────────────────────────────────────────────────────
+  //
+  // PRINCIPE : une seule écoute authStateChanges(), on prend le PREMIER
+  // événement (max 5s), on traite, puis on s'arrête.
+  // Ensuite on écoute les changements sans jamais toucher à _chargement.
+  //
   Future<void> initialiser() async {
-    _setChargement(true);
+    // Marquer chargement sans notifyListeners pour éviter rebuild prématuré
+    _chargement = true;
 
-    // ── Timer de sécurité absolu : dans TOUS les cas, fin dans 10s ────────
-    Timer(const Duration(seconds: 10), () {
+    // ── Filet de sécurité absolu ─────────────────────────────────────────
+    // Quoi qu'il arrive, dans 5s l'app sort du splash.
+    Timer(const Duration(seconds: 5), () {
       if (_chargement) {
-        debugPrint('[AppProvider] ⏰ Timer sécurité 10s déclenché');
+        debugPrint('[AppProvider] ⏰ Filet 5s — sortie forcée');
         _chargement = false;
         notifyListeners();
       }
     });
 
     try {
-      // Vérifier si l'utilisateur est déjà connu IMMÉDIATEMENT (currentUser)
-      // Firebase Web conserve la session dans IndexedDB — currentUser est
-      // disponible après initializeApp sans attendre authStateChanges
-      final currentUser = _auth.currentUser;
+      // Un seul completer pour le premier état auth
+      final completer = Completer<User?>();
 
-      if (currentUser != null) {
-        // Utilisateur déjà connecté → charger son profil
-        await _chargerProfilFirebase(currentUser.uid);
+      final sub = _auth.authStateChanges().listen(
+        (user) { if (!completer.isCompleted) completer.complete(user); },
+        onError: (_) { if (!completer.isCompleted) completer.complete(null); },
+      );
+
+      // Timeout 4s : si Firebase ne répond pas, on passe null
+      final User? firebaseUser = await completer.future
+          .timeout(const Duration(seconds: 4), onTimeout: () => null)
+          .catchError((_) => null);
+
+      await sub.cancel(); // On ferme cette écoute unique
+
+      if (firebaseUser != null) {
+        await _chargerProfilFirebase(firebaseUser.uid);
       } else {
-        // Pas d'utilisateur connu → attendre authStateChanges max 6s
-        final completer = Completer<User?>();
-        StreamSubscription<User?>? sub;
-        sub = _auth.authStateChanges().listen((user) {
-          if (!completer.isCompleted) completer.complete(user);
-        }, onError: (e) {
-          debugPrint('[AppProvider] authStateChanges error: $e');
-          if (!completer.isCompleted) completer.complete(null);
-        });
-
-        User? firebaseUser;
-        try {
-          firebaseUser = await completer.future
-              .timeout(const Duration(seconds: 6), onTimeout: () => null);
-        } catch (_) {
-          firebaseUser = null;
-        }
-        await sub.cancel();
-
-        if (firebaseUser != null) {
-          await _chargerProfilFirebase(firebaseUser.uid);
-        } else {
-          _viderEtat(); // _chargement = false + notifyListeners()
-        }
+        // Non connecté : sortir du splash immédiatement
+        _chargement = false;
+        notifyListeners();
       }
-
-      // Charger les plans (non bloquant, erreurs silencieuses)
-      unawaited(chargerPlansConfig());
-
-      // Écouter les changements d'auth ultérieurs
-      _auth.authStateChanges().listen((User? u) async {
-        if (u == null) {
-          _viderEtat();
-        } else if (u.uid != _utilisateurConnecte?.id) {
-          await _chargerProfilFirebase(u.uid);
-        }
-      });
 
     } catch (e) {
       debugPrint('[AppProvider] initialiser error: $e');
       _chargement = false;
       notifyListeners();
     }
+
+    // Charger les plans en arrière-plan (jamais bloquant)
+    _chargerPlansEnArrierePlan();
+
+    // Écouter les changements d'auth APRÈS le démarrage (déconnexion, etc.)
+    _auth.authStateChanges().listen((User? u) async {
+      if (u == null && _utilisateurConnecte != null) {
+        // Déconnexion réelle → vider sans changer _chargement
+        _utilisateurConnecte = null;
+        _entrepriseActive    = null;
+        _standActuel         = null;
+        _membres             = [];
+        _stands              = [];
+        _operations          = [];
+        _tauxRistourne       = [];
+        _alertes             = [];
+        _demandesReequil     = [];
+        _abonnements         = [];
+        notifyListeners();
+      }
+      // On ne recharge PAS le profil ici pour éviter toute boucle
+    });
+  }
+
+  /// Charger les plans d'abonnement en arrière-plan, sans bloquer ni crasher
+  void _chargerPlansEnArrierePlan() {
+    Future.microtask(() async {
+      try {
+        _plansConfig  = await ConfigAbonnementService.chargerPlans()
+            .timeout(const Duration(seconds: 8), onTimeout: () => []);
+        _configGlobal = await ConfigAbonnementService.chargerGlobal()
+            .timeout(const Duration(seconds: 8), onTimeout: () => const ConfigAbonnementGlobal());
+        notifyListeners();
+      } catch (e) {
+        debugPrint('[AppProvider] plans arrière-plan error: $e');
+      }
+    });
   }
 
   void _viderEtat() {
