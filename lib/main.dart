@@ -18,29 +18,23 @@ import 'screens/admin/admin_dashboard.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialiser Firebase — simple et direct
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    if (kDebugMode) debugPrint('[SikaFlow] Firebase initialisé');
 
-    // ⚡ CRITIQUE : sur le Web, désactiver la persistance Firestore (cache local)
-    // pour que les données du super-admin apparaissent immédiatement sans cache.
+    // Sur Web : désactiver la persistance locale pour toujours lire depuis Firestore
     if (kIsWeb) {
       FirebaseFirestore.instance.settings = const Settings(
         persistenceEnabled: false,
-        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
       );
-      if (kDebugMode) debugPrint('[SikaFlow] Firestore persistance désactivée (Web)');
     }
   } on FirebaseException catch (e) {
-    // App déjà initialisée (hot-reload)
     if (e.code != 'duplicate-app') {
-      if (kDebugMode) debugPrint('[SikaFlow] FirebaseException: ${e.code} - ${e.message}');
+      debugPrint('[SikaFlow] FirebaseException: ${e.code}');
     }
   } catch (e) {
-    if (kDebugMode) debugPrint('[SikaFlow] Firebase erreur: $e');
+    debugPrint('[SikaFlow] Firebase erreur: $e');
   }
 
   runApp(const SikaFlowApp());

@@ -69,6 +69,18 @@
   </div>
 
   <script>
+    // Supprimer tous les service workers et caches existants
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(regs) {
+        regs.forEach(function(r) { r.unregister(); });
+      });
+      if (window.caches) {
+        caches.keys().then(function(keys) {
+          keys.forEach(function(k) { caches.delete(k); });
+        });
+      }
+    }
+
     window.addEventListener('flutter-first-frame', function() {
       var loading = document.getElementById('loading');
       if (loading) {
@@ -78,6 +90,18 @@
     });
   </script>
 
-  <script src="flutter_bootstrap.js" async></script>
+  <script src="flutter.js" defer></script>
+  <script>
+    window.addEventListener('load', function() {
+      // Charger Flutter SANS service worker
+      _flutter.loader.load({
+        // Pas de serviceWorkerSettings = service worker désactivé
+        onEntrypointLoaded: async function(engineInitializer) {
+          var appRunner = await engineInitializer.initializeEngine();
+          await appRunner.runApp();
+        }
+      });
+    });
+  </script>
 </body>
 </html>

@@ -165,17 +165,12 @@ class ConfigAbonnementService {
     return result;
   }
 
-  // ── Lecture directe depuis le SERVEUR (jamais depuis le cache) ────────────
-  // Utilisé par la landing page et l'écran admin.
+  // ── Lecture Firestore (persistenceEnabled:false dans main.dart = toujours réseau) ──
   static Future<List<PlanConfig>> chargerPlans() async {
     try {
-      // Source.server force la lecture réseau, ignore tout cache local
-      final doc = await _db
-          .collection(_col)
-          .doc('plans')
-          .get(const GetOptions(source: Source.server));
+      final doc = await _db.collection(_col).doc('plans').get();
       if (!doc.exists || doc.data() == null) {
-        debugPrint('[Plans] document absent sur le serveur');
+        debugPrint('[Plans] document plans absent');
         return [];
       }
       final items = _parseItems(doc.data()!['items']);
@@ -190,10 +185,7 @@ class ConfigAbonnementService {
 
   static Future<ConfigAbonnementGlobal> chargerGlobal() async {
     try {
-      final doc = await _db
-          .collection(_col)
-          .doc('global')
-          .get(const GetOptions(source: Source.server));
+      final doc = await _db.collection(_col).doc('global').get();
       if (!doc.exists || doc.data() == null) return const ConfigAbonnementGlobal();
       return ConfigAbonnementGlobal.fromMap(_normaliserMap(doc.data()!));
     } catch (e) {
