@@ -155,11 +155,24 @@ class ConfigAbonnementGlobal {
 
 // ── Plans par défaut (utilisés si Firestore est vide) ──────────────────────
 const List<Map<String, dynamic>> kPlansParDefaut = [
-  {'code':'solo',       'label':'Solo',       'min_stands':1,  'max_stands':1,  'prix_mensuel':3000,  'description':'1 stand · Idéal pour démarrer',               'couleur_hex':0xFF4CAF50,'actif':true,'ordre':1},
-  {'code':'duo',        'label':'Duo',        'min_stands':2,  'max_stands':3,  'prix_mensuel':6000,  'description':'2 à 3 stands · Pour une petite agence',       'couleur_hex':0xFF2196F3,'actif':true,'ordre':2},
-  {'code':'team',       'label':'Team',       'min_stands':4,  'max_stands':6,  'prix_mensuel':12000, 'description':'4 à 6 stands · Pour une agence en croissance', 'couleur_hex':0xFFFF6B35,'actif':true,'ordre':3},
-  {'code':'pro',        'label':'Pro',        'min_stands':7,  'max_stands':10, 'prix_mensuel':20000, 'description':'7 à 10 stands · Pour une agence établie',      'couleur_hex':0xFF9C27B0,'actif':true,'ordre':4},
-  {'code':'enterprise', 'label':'Enterprise', 'min_stands':11, 'max_stands':-1, 'prix_mensuel':30000, 'description':'11 stands et plus · Pour les grandes agences', 'couleur_hex':0xFFFFCC00,'actif':true,'ordre':5},
+  {
+    'code':'solo', 'label':'Solo', 'min_stands':1, 'max_stands':1,
+    'prix_mensuel':1200, 'description':'Parfait pour démarrer avec 1 stand',
+    'couleur_hex':0xFF4CAF50, 'actif':true, 'ordre':1, 'populaire':false,
+    'features':['1 stand','Tableau de bord complet','Gestion des opérations','Rapports journaliers','Support email'],
+  },
+  {
+    'code':'pro', 'label':'Pro', 'min_stands':2, 'max_stands':5,
+    'prix_mensuel':5000, 'description':'Pour les agences en croissance',
+    'couleur_hex':0xFFFF6B35, 'actif':true, 'ordre':2, 'populaire':true,
+    'features':['Jusqu\'à 5 stands','Tout le plan Solo','Multi-agents & contrôleurs','Alertes automatiques','Rapports avancés','Support prioritaire'],
+  },
+  {
+    'code':'enterprise', 'label':'Entreprise', 'min_stands':6, 'max_stands':-1,
+    'prix_mensuel':10000, 'description':'Pour les grandes agences, stands illimités',
+    'couleur_hex':0xFFFFCC00, 'actif':true, 'ordre':3, 'populaire':false,
+    'features':['Stands illimités','Tout le plan Pro','API & intégrations','SLA garanti 99.9%','Gestionnaire dédié','Formation incluse'],
+  },
 ];
 
 // ── Service Firestore pour la config ───────────────────────────────────────

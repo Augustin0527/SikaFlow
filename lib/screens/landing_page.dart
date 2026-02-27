@@ -63,24 +63,24 @@ class _LandingPageState extends State<LandingPage>
   static List<PlanConfig> _plansStatiques() {
     return [
       const PlanConfig(
-        code: 'solo', label: 'Solo', minStands: 1, maxStands: 3,
-        prixMensuel: 3000, description: 'Idéal pour démarrer',
+        code: 'solo', label: 'Solo', minStands: 1, maxStands: 1,
+        prixMensuel: 1200, description: 'Parfait pour démarrer avec 1 stand',
         couleurHex: 0xFF4CAF50, actif: true, ordre: 1,
-        features: ['1 à 3 stands', 'Tableau de bord complet', 'Gestion des opérations', 'Rapports journaliers', 'Support email'],
+        features: ['1 stand', 'Tableau de bord complet', 'Gestion des opérations', 'Rapports journaliers', 'Support email'],
         populaire: false,
       ),
       const PlanConfig(
-        code: 'pro', label: 'Pro', minStands: 4, maxStands: 10,
-        prixMensuel: 8000, description: 'Pour les agences en croissance',
+        code: 'pro', label: 'Pro', minStands: 2, maxStands: 5,
+        prixMensuel: 5000, description: 'Pour les agences en croissance',
         couleurHex: 0xFFFF6B35, actif: true, ordre: 2,
-        features: ['4 à 10 stands', 'Tout le plan Solo', 'Multi-agents & contrôleurs', 'Alertes automatiques', 'Rapports avancés', 'Support prioritaire'],
+        features: ['Jusqu\'à 5 stands', 'Tout le plan Solo', 'Multi-agents & contrôleurs', 'Alertes automatiques', 'Rapports avancés', 'Support prioritaire'],
         populaire: true,
       ),
       const PlanConfig(
-        code: 'enterprise', label: 'Enterprise', minStands: 11, maxStands: -1,
-        prixMensuel: 15000, description: 'Pour les grandes agences',
+        code: 'enterprise', label: 'Entreprise', minStands: 6, maxStands: -1,
+        prixMensuel: 10000, description: 'Pour les grandes agences, stands illimités',
         couleurHex: 0xFFFFCC00, actif: true, ordre: 3,
-        features: ['11+ stands illimités', 'Tout le plan Pro', 'API & intégrations', 'SLA garanti 99.9%', 'Gestionnaire dédié', 'Formation incluse'],
+        features: ['Stands illimités', 'Tout le plan Pro', 'API & intégrations', 'SLA garanti 99.9%', 'Gestionnaire dédié', 'Formation incluse'],
         populaire: false,
       ),
     ];

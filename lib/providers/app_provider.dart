@@ -16,10 +16,14 @@ import '../models/plan_config_model.dart';
 class AppProvider extends ChangeNotifier {
   // ignore: unused_field
   final _uuid = const Uuid();
-  // late : initialisés dans initialiser() APRÈS Firebase.initializeApp()
-  late FirebaseAuth _auth;
-  late FirebaseFirestore _db;
-  bool _firebaseInitialise = false;
+
+  // Firebase — initialisés lors du premier appel à _ensureFirebase()
+  FirebaseAuth?      _authField;
+  FirebaseFirestore? _dbField;
+
+  // Getters internes sécurisés — fonctionnent même si Firebase s'init en arrière-plan
+  FirebaseAuth      get _authSafe => _authField ?? FirebaseAuth.instance;
+  FirebaseFirestore get _dbSafe   => _dbField   ?? FirebaseFirestore.instance;
 
   // ── État global ───────────────────────────────────────────────────────────
   UserModel?       _utilisateurConnecte;
@@ -53,12 +57,8 @@ class AppProvider extends ChangeNotifier {
   // Retourne true si l'email Firebase est vérifié
   // Vérification sécurisée : _auth peut ne pas être encore initialisé
   bool get emailVerifie {
-    try {
-      if (!_firebaseInitialise) return false;
-      return _auth.currentUser?.emailVerified ?? false;
-    } catch (_) {
-      return false;
-    }
+    try { return _authField?.currentUser?.emailVerified ?? false; }
+    catch (_) { return false; }
   }
 
   List<UserModel>            get membres          => List.unmodifiable(_membres);
@@ -83,28 +83,36 @@ class AppProvider extends ChangeNotifier {
   List<UserModel> get controleurs => _membres.where((u) => u.role == 'controleur').toList();
   List<StandModel> get standsActifs => _stands.where((s) => s.actif).toList();
 
+  // ── Assure que Firebase est initialisé (appel idempotent) ──────────────────
+  Future<bool> _ensureFirebase() async {
+    // Déjà prêt
+    if (_authField != null && _dbField != null) return true;
+    if (Firebase.apps.isNotEmpty) {
+      _authField = FirebaseAuth.instance;
+      _dbField   = FirebaseFirestore.instance;
+      return true;
+    }
+    // Attendre jusqu'à 15 secondes (connexions lentes)
+    for (int i = 0; i < 50; i++) {
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (Firebase.apps.isNotEmpty) {
+        _authField = FirebaseAuth.instance;
+        _dbField   = FirebaseFirestore.instance;
+        return true;
+      }
+    }
+    debugPrint('[AppProvider] ❌ Firebase toujours pas prêt après 15s');
+    return false;
+  }
+
   // ── Initialisation (appelé uniquement au moment de la connexion) ──────────
   Future<void> initialiser() async {
-    if (_firebaseInitialise) return;
-
-    // Attendre que Firebase soit prêt (initialisé en arrière-plan dans main())
-    for (int i = 0; i < 20; i++) {
-      if (Firebase.apps.isNotEmpty) break;
-      await Future.delayed(const Duration(milliseconds: 300));
-    }
-
-    if (Firebase.apps.isEmpty) {
-      debugPrint('[AppProvider] Firebase toujours pas prêt après attente');
-      return;
-    }
-
-    _auth = FirebaseAuth.instance;
-    _db   = FirebaseFirestore.instance;
-    _firebaseInitialise = true;
+    final ok = await _ensureFirebase();
+    if (!ok) return;
 
     // Vérifier si l'utilisateur est déjà connecté (session persistante)
     try {
-      final currentUser = _auth.currentUser;
+      final currentUser = _authSafe.currentUser;
       if (currentUser != null) {
         _setChargement(true);
         notifyListeners();
@@ -112,7 +120,7 @@ class AppProvider extends ChangeNotifier {
       }
 
       // Écouter les changements d'auth
-      _auth.authStateChanges().listen((User? u) async {
+      _authSafe.authStateChanges().listen((User? u) async {
         if (u == null && _utilisateurConnecte != null) {
           _viderEtat();
         } else if (u != null && u.uid != _utilisateurConnecte?.id) {
@@ -169,7 +177,7 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> _chargerProfilFirebase(String uid) async {
     try {
-      final userDoc = await _db.collection('users').doc(uid).get();
+      final userDoc = await _dbSafe.collection('users').doc(uid).get();
       if (!userDoc.exists) {
         _viderEtat();
         return;
@@ -215,18 +223,16 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Initialiser Firebase si pas encore fait (premier appel après la landing)
-      if (!_firebaseInitialise) {
-        await initialiser();
-      }
-      if (!_firebaseInitialise) {
-        _erreur = 'Connexion impossible. Vérifiez votre connexion internet.';
+      // S'assurer que Firebase est prêt (attend jusqu'à 15s si nécessaire)
+      final firebaseOk = await _ensureFirebase();
+      if (!firebaseOk) {
+        _erreur = 'Service temporairement indisponible. Réessayez dans quelques instants.';
         _setChargement(false);
         notifyListeners();
         return false;
       }
 
-      final credential = await _auth.signInWithEmailAndPassword(
+      final credential = await _authSafe.signInWithEmailAndPassword(
         email: email.trim(),
         password: motDePasse,
       );
@@ -240,13 +246,12 @@ class AppProvider extends ChangeNotifier {
 
       // Recharger pour avoir le statut emailVerified à jour
       await firebaseUser.reload();
-      final userActuel = _auth.currentUser;
+      final userActuel = _authSafe.currentUser;
 
       // Si l'email est vérifié → activer le compte si encore en_attente
       if (userActuel != null && userActuel.emailVerified) {
         await _activerCompteApresVerification(firebaseUser.uid);
       }
-      // Sinon on laisse passer : la bannière dans le dashboard informera l'utilisateur
 
       await _chargerProfilFirebase(firebaseUser.uid);
       return _utilisateurConnecte != null;
@@ -267,21 +272,21 @@ class AppProvider extends ChangeNotifier {
   // Activer le compte après vérification email (statut en_attente → essai)
   Future<void> _activerCompteApresVerification(String uid) async {
     try {
-      final userDoc = await _db.collection('users').doc(uid).get();
+      final userDoc = await _dbSafe.collection('users').doc(uid).get();
       if (!userDoc.exists) return;
       final data = userDoc.data()!;
 
       // Mettre à jour email_verifie dans users
       if (data['email_verifie'] != true) {
-        await _db.collection('users').doc(uid).update({'email_verifie': true});
+        await _dbSafe.collection('users').doc(uid).update({'email_verifie': true});
       }
 
       // Activer l'entreprise si encore en_attente
       final entrepriseId = data['entreprise_id'] as String?;
       if (entrepriseId != null) {
-        final entDoc = await _db.collection('entreprises').doc(entrepriseId).get();
+        final entDoc = await _dbSafe.collection('entreprises').doc(entrepriseId).get();
         if (entDoc.exists && entDoc.data()?['statut'] == 'en_attente') {
-          await _db.collection('entreprises').doc(entrepriseId).update({
+          await _dbSafe.collection('entreprises').doc(entrepriseId).update({
             'statut': 'essai',
           });
         }
@@ -292,7 +297,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   void seDeconnecter() {
-    _auth.signOut();
+    _authSafe.signOut();
     _viderEtat();
   }
 
@@ -301,7 +306,7 @@ class AppProvider extends ChangeNotifier {
     required String email,
   }) async {
     try {
-      await _auth.sendPasswordResetEmail(email: email.trim());
+      await _authSafe.sendPasswordResetEmail(email: email.trim());
       return {'success': true};
     } on FirebaseAuthException catch (e) {
       return {'success': false, 'erreur': _traduireErreur(e.code)};
@@ -317,11 +322,11 @@ class AppProvider extends ChangeNotifier {
   }) async {
     try {
       // Se connecter temporairement pour pouvoir envoyer l'email
-      final cred = await _auth.signInWithEmailAndPassword(
+      final cred = await _authSafe.signInWithEmailAndPassword(
         email: email.trim(), password: motDePasse,
       );
       await cred.user?.sendEmailVerification();
-      await _auth.signOut();
+      await _authSafe.signOut();
       return {'success': true};
     } on FirebaseAuthException catch (e) {
       return {'success': false, 'erreur': _traduireErreur(e.code)};
@@ -333,7 +338,7 @@ class AppProvider extends ChangeNotifier {
   // ── Renvoyer email de vérification (utilisateur déjà connecté) ───────────
   Future<Map<String, dynamic>> renvoyerEmailVerificationConnecte() async {
     try {
-      final user = _auth.currentUser;
+      final user = _authSafe.currentUser;
       if (user == null) return {'success': false, 'erreur': 'Utilisateur non connecté'};
       await user.sendEmailVerification();
       return {'success': true};
@@ -347,15 +352,15 @@ class AppProvider extends ChangeNotifier {
   // ── Vérifier et activer si email vérifié (appelé depuis le dashboard) ─────
   Future<bool> verifierActivationEmail() async {
     try {
-      final user = _auth.currentUser;
+      final user = _authSafe.currentUser;
       if (user == null) return false;
       await user.reload();
-      final reloaded = _auth.currentUser;
+      final reloaded = _authSafe.currentUser;
       if (reloaded != null && reloaded.emailVerified) {
         await _activerCompteApresVerification(reloaded.uid);
         // Mettre à jour le profil local
         if (_utilisateurConnecte != null) {
-          final doc = await _db.collection('users').doc(reloaded.uid).get();
+          final doc = await _dbSafe.collection('users').doc(reloaded.uid).get();
           if (doc.exists) {
             _utilisateurConnecte = UserModel.fromFirestore(doc.data()!, reloaded.uid);
           }
@@ -384,15 +389,13 @@ class AppProvider extends ChangeNotifier {
     String? description,
   }) async {
     try {
-      // Initialiser Firebase si pas encore fait
-      if (!_firebaseInitialise) {
-        await initialiser();
-      }
-      if (!_firebaseInitialise) {
+      // S'assurer que Firebase est prêt
+      final firebaseOk = await _ensureFirebase();
+      if (!firebaseOk) {
         return {'success': false, 'message': 'Service indisponible. Vérifiez votre connexion internet.'};
       }
       // Créer le compte Firebase Auth
-      final credential = await _auth.createUserWithEmailAndPassword(
+      final credential = await _authSafe.createUserWithEmailAndPassword(
         email: email, password: motDePasse,
       );
       final uid  = credential.user!.uid;
@@ -406,7 +409,7 @@ class AppProvider extends ChangeNotifier {
       } catch (_) {}
 
       // Créer l'entreprise avec statut en_attente
-      final entrepriseRef = _db.collection('entreprises').doc();
+      final entrepriseRef = _dbSafe.collection('entreprises').doc();
       final entrepriseId  = entrepriseRef.id;
       await entrepriseRef.set({
         'id': entrepriseId,
@@ -430,7 +433,7 @@ class AppProvider extends ChangeNotifier {
       });
 
       // Créer le profil utilisateur
-      await _db.collection('users').doc(uid).set({
+      await _dbSafe.collection('users').doc(uid).set({
         'id': uid,
         'prenom': prenom,
         'nom': nom,
@@ -464,7 +467,7 @@ class AppProvider extends ChangeNotifier {
   // ── Chargement des données ─────────────────────────────────────────────────
   Future<void> _chargerEntreprise(String entrepriseId) async {
     try {
-      final doc = await _db.collection('entreprises').doc(entrepriseId).get();
+      final doc = await _dbSafe.collection('entreprises').doc(entrepriseId).get();
       if (doc.exists) {
         _entrepriseActive = EntrepriseModel.fromFirestore(doc.data()!, doc.id);
       }
@@ -476,7 +479,7 @@ class AppProvider extends ChangeNotifier {
   Future<void> _chargerMembres() async {
     if (_utilisateurConnecte?.entrepriseId == null) return;
     try {
-      final snap = await _db.collection('users')
+      final snap = await _dbSafe.collection('users')
           .where('entreprise_id', isEqualTo: _utilisateurConnecte!.entrepriseId)
           .get();
       _membres = snap.docs
@@ -491,7 +494,7 @@ class AppProvider extends ChangeNotifier {
   Future<void> _chargerStands() async {
     if (_utilisateurConnecte?.entrepriseId == null) return;
     try {
-      final snap = await _db.collection('stands')
+      final snap = await _dbSafe.collection('stands')
           .where('entreprise_id', isEqualTo: _utilisateurConnecte!.entrepriseId)
           .get();
       _stands = snap.docs
@@ -505,7 +508,7 @@ class AppProvider extends ChangeNotifier {
   Future<void> _chargerTauxRistourne() async {
     if (_utilisateurConnecte?.entrepriseId == null) return;
     try {
-      final snap = await _db.collection('taux_ristourne')
+      final snap = await _dbSafe.collection('taux_ristourne')
           .where('entreprise_id', isEqualTo: _utilisateurConnecte!.entrepriseId)
           .get();
       _tauxRistourne = snap.docs
@@ -519,7 +522,7 @@ class AppProvider extends ChangeNotifier {
   Future<void> _chargerAlertes() async {
     if (_utilisateurConnecte?.entrepriseId == null) return;
     try {
-      final snap = await _db.collection('alertes')
+      final snap = await _dbSafe.collection('alertes')
           .where('entreprise_id', isEqualTo: _utilisateurConnecte!.entrepriseId)
           .get();
       _alertes = snap.docs
@@ -534,7 +537,7 @@ class AppProvider extends ChangeNotifier {
   Future<void> _chargerDemandesReequilibrage() async {
     if (_utilisateurConnecte?.entrepriseId == null) return;
     try {
-      final snap = await _db.collection('demandes_reequilibrage')
+      final snap = await _dbSafe.collection('demandes_reequilibrage')
           .where('entreprise_id', isEqualTo: _utilisateurConnecte!.entrepriseId)
           .get();
       _demandesReequil = snap.docs
@@ -548,7 +551,7 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> chargerOperationsStand(String standId, {int limite = 50}) async {
     try {
-      final snap = await _db.collection('operations')
+      final snap = await _dbSafe.collection('operations')
           .where('stand_id', isEqualTo: standId)
           .get();
       _operations = snap.docs
@@ -590,7 +593,7 @@ class AppProvider extends ChangeNotifier {
     String? longitude,
   }) async {
     try {
-      final ref = _db.collection('stands').doc();
+      final ref = _dbSafe.collection('stands').doc();
       final stand = StandModel(
         id: ref.id,
         nom: nom,
@@ -606,7 +609,7 @@ class AppProvider extends ChangeNotifier {
 
       // Enregistrer le mouvement capital initial si non nul
       if (capitalEspecesInitial > 0) {
-        await _db.collection('mouvements_capital').doc().set({
+        await _dbSafe.collection('mouvements_capital').doc().set({
           'stand_id': ref.id,
           'entreprise_id': _utilisateurConnecte!.entrepriseId!,
           'type': 'capital_initial_especes',
@@ -618,7 +621,7 @@ class AppProvider extends ChangeNotifier {
       }
       for (final sim in sims) {
         if (sim.solde > 0) {
-          await _db.collection('mouvements_capital').doc().set({
+          await _dbSafe.collection('mouvements_capital').doc().set({
             'stand_id': ref.id,
             'entreprise_id': _utilisateurConnecte!.entrepriseId!,
             'type': 'capital_initial_sim',
@@ -677,7 +680,7 @@ class AppProvider extends ChangeNotifier {
       ));
 
       // Mettre à jour Firestore — stand
-      await _db.collection('stands').doc(standId).update({
+      await _dbSafe.collection('stands').doc(standId).update({
         'agent_actuel_id': agentId,
         'agent_actuel_nom': agent.nomComplet,
         'date_affectation_agent': Timestamp.fromDate(maintenant),
@@ -685,7 +688,7 @@ class AppProvider extends ChangeNotifier {
       });
 
       // Mettre à jour Firestore — agent
-      await _db.collection('users').doc(agentId).update({
+      await _dbSafe.collection('users').doc(agentId).update({
         'stand_id': standId,
         'date_affectation_stand': Timestamp.fromDate(maintenant),
       });
@@ -737,10 +740,10 @@ class AppProvider extends ChangeNotifier {
         updates['sims'] = sims.map((s) => s.toMap()).toList();
       }
 
-      await _db.collection('stands').doc(standId).update(updates);
+      await _dbSafe.collection('stands').doc(standId).update(updates);
 
       // Enregistrer le mouvement
-      await _db.collection('mouvements_capital').doc().set({
+      await _dbSafe.collection('mouvements_capital').doc().set({
         'stand_id': standId,
         'entreprise_id': _utilisateurConnecte!.entrepriseId,
         'effectue_par': _utilisateurConnecte!.id,
@@ -794,7 +797,7 @@ class AppProvider extends ChangeNotifier {
       // Délai de modification
       final delaiHeures = _entrepriseActive?.delaiModificationHeures ?? 30;
       // Créer l'opération
-      final ref = _db.collection('operations').doc();
+      final ref = _dbSafe.collection('operations').doc();
       final operation = OperationModel(
         id: ref.id,
         standId: standId,
@@ -829,7 +832,7 @@ class AppProvider extends ChangeNotifier {
       }).toList();
       updates['sims'] = simsUpdated.map((s) => s.toMap()).toList();
 
-      await _db.collection('stands').doc(standId).update(updates);
+      await _dbSafe.collection('stands').doc(standId).update(updates);
 
       // Vérifier les alertes après mise à jour
       final newSoldeEspeces = stand.soldeEspeces + impactEsp;
@@ -838,7 +841,7 @@ class AppProvider extends ChangeNotifier {
 
       // Planifier désactivation de la modifiabilité
       Future.delayed(Duration(hours: delaiHeures), () async {
-        await _db.collection('operations').doc(ref.id).update({'modifiable': false});
+        await _dbSafe.collection('operations').doc(ref.id).update({'modifiable': false});
       });
 
       await rafraichir();
@@ -879,7 +882,7 @@ class AppProvider extends ChangeNotifier {
     }
 
     if (typeAlerteEsp != null) {
-      await _db.collection('alertes').doc().set({
+      await _dbSafe.collection('alertes').doc().set({
         'stand_id': stand.id,
         'stand_nom': stand.nom,
         'entreprise_id': ent.id,
@@ -903,7 +906,7 @@ class AppProvider extends ChangeNotifier {
     }
 
     if (typeAlerteSim != null) {
-      await _db.collection('alertes').doc().set({
+      await _dbSafe.collection('alertes').doc().set({
         'stand_id': stand.id,
         'stand_nom': stand.nom,
         'entreprise_id': ent.id,
@@ -932,7 +935,7 @@ class AppProvider extends ChangeNotifier {
       final user = _utilisateurConnecte!;
       final stand = _stands.firstWhere((s) => s.id == standId);
 
-      final ref = _db.collection('demandes_reequilibrage').doc();
+      final ref = _dbSafe.collection('demandes_reequilibrage').doc();
       await ref.set({
         'stand_id': standId,
         'stand_nom': stand.nom,
@@ -969,7 +972,7 @@ class AppProvider extends ChangeNotifier {
       final demande = _demandesReequil.firstWhere((d) => d.id == demandeId);
       final user = _utilisateurConnecte!;
 
-      await _db.collection('demandes_reequilibrage').doc(demandeId).update({
+      await _dbSafe.collection('demandes_reequilibrage').doc(demandeId).update({
         'statut': approuve ? 'approuve' : 'refuse',
         'date_traitement': Timestamp.now(),
         'traite_par': user.id,
@@ -1046,7 +1049,7 @@ class AppProvider extends ChangeNotifier {
     DateTime? dateFin,
   }) async {
     try {
-      final ref = _db.collection('taux_ristourne').doc();
+      final ref = _dbSafe.collection('taux_ristourne').doc();
       await ref.set({
         'entreprise_id': _utilisateurConnecte!.entrepriseId,
         'operateur': operateur,
@@ -1077,7 +1080,7 @@ class AppProvider extends ChangeNotifier {
       final motDePasseProv = _genererMotDePasse();
 
       // Vérifier email existant
-      final existing = await _db.collection('users')
+      final existing = await _dbSafe.collection('users')
           .where('email', isEqualTo: email)
           .get();
       if (existing.docs.isNotEmpty) {
@@ -1088,7 +1091,7 @@ class AppProvider extends ChangeNotifier {
       final uid = await _creerCompteViaRestApi(email, motDePasseProv);
       if (uid == null) return {'success': false, 'erreur': 'Impossible de créer le compte.'};
 
-      await _db.collection('users').doc(uid).set({
+      await _dbSafe.collection('users').doc(uid).set({
         'id': uid,
         'prenom': prenom,
         'nom': nom,
@@ -1153,7 +1156,7 @@ class AppProvider extends ChangeNotifier {
 
   // ── Marquer alerte comme lue ───────────────────────────────────────────────
   Future<void> marquerAlerteLue(String alerteId) async {
-    await _db.collection('alertes').doc(alerteId).update({'lue': true});
+    await _dbSafe.collection('alertes').doc(alerteId).update({'lue': true});
     final idx = _alertes.indexWhere((a) => a.id == alerteId);
     if (idx != -1) {
       _alertes[idx] = AlerteModel(
@@ -1176,7 +1179,7 @@ class AppProvider extends ChangeNotifier {
   Future<Map<String, dynamic>> mettreAJourConfigEntreprise(
       Map<String, dynamic> config) async {
     try {
-      await _db.collection('entreprises')
+      await _dbSafe.collection('entreprises')
           .doc(_utilisateurConnecte!.entrepriseId)
           .update(config);
       await _chargerEntreprise(_utilisateurConnecte!.entrepriseId!);
@@ -1193,13 +1196,13 @@ class AppProvider extends ChangeNotifier {
     required String nouveauMotDePasse,
   }) async {
     try {
-      final user = _auth.currentUser!;
+      final user = _authSafe.currentUser!;
       final credential = EmailAuthProvider.credential(
         email: user.email!, password: ancienMotDePasse,
       );
       await user.reauthenticateWithCredential(credential);
       await user.updatePassword(nouveauMotDePasse);
-      await _db.collection('users').doc(user.uid).update({
+      await _dbSafe.collection('users').doc(user.uid).update({
         'mot_de_passe_provisoire': false,
       });
       return {'success': true};
