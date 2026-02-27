@@ -159,31 +159,64 @@ class ConfigAbonnementService {
   static final _db = FirebaseFirestore.instance;
   static const _col = 'config_abonnement';
 
-  // ── Charger tous les plans ───────────────────────────────────────────────
+  // ── Parseur sécurisé (Web + natif) ──────────────────────────────────────
+  // Sur Web, Firestore JS retourne des Map<Object?,Object?> et des num au lieu
+  // de Map<String,dynamic> et int. On normalise ici.
+  static List<PlanConfig> _parseItems(dynamic rawItems) {
+    if (rawItems == null || rawItems is! List) return [];
+    final result = <PlanConfig>[];
+    for (final e in rawItems) {
+      try {
+        // Convertit Map<Object?,Object?> → Map<String,dynamic>
+        final map = Map<String, dynamic>.fromEntries(
+          (e as Map).entries.map((entry) =>
+            MapEntry(entry.key.toString(), entry.value),
+          ),
+        );
+        result.add(PlanConfig.fromMap(map));
+      } catch (err) {
+        debugPrint('[ConfigAbonnementService] _parseItems skip item: $err');
+      }
+    }
+    return result;
+  }
+
+  // ── Charger tous les plans (lecture réseau forcée, sans cache) ───────────
   static Future<List<PlanConfig>> chargerPlans() async {
     try {
-      final doc = await _db.collection(_col).doc('plans').get();
+      // GetOptions(source: Source.server) force la lecture depuis le serveur
+      // et évite le snapshot cache vide qui déclenchait l'initialisation
+      final doc = await _db.collection(_col).doc('plans')
+          .get(const GetOptions(source: Source.server));
+
       if (!doc.exists) {
-        debugPrint('[ConfigAbonnementService] plans doc absent → initialisation défaut');
-        await _initialiserPlansParDefaut();
+        debugPrint('[ConfigAbonnementService] plans doc absent sur serveur');
         return kPlansParDefaut.map(PlanConfig.fromMap).toList();
       }
-      final rawItems = doc.data()?['items'];
-      final List<dynamic> itemsList = rawItems is List ? rawItems : [];
-      debugPrint('[ConfigAbonnementService] rawItems type=${rawItems.runtimeType} len=${itemsList.length}');
-      final items = itemsList
-          .map((e) => PlanConfig.fromMap(Map<String, dynamic>.from(e as Map)))
-          .toList();
+
+      final items = _parseItems(doc.data()?['items']);
       if (items.isEmpty) {
-        debugPrint('[ConfigAbonnementService] items vide → initialisation défaut');
-        await _initialiserPlansParDefaut();
+        debugPrint('[ConfigAbonnementService] items vide (serveur)');
         return kPlansParDefaut.map(PlanConfig.fromMap).toList();
       }
+
       items.sort((a, b) => a.ordre.compareTo(b.ordre));
-      debugPrint('[ConfigAbonnementService] ${items.length} plans chargés depuis Firestore');
+      debugPrint('[ConfigAbonnementService] ${items.length} plans chargés depuis serveur');
       return items;
     } catch (e, st) {
       debugPrint('[ConfigAbonnementService] chargerPlans ERROR: $e\n$st');
+      // Dernier recours : lecture depuis le cache local
+      try {
+        final docCache = await _db.collection(_col).doc('plans').get();
+        if (docCache.exists) {
+          final items = _parseItems(docCache.data()?['items']);
+          if (items.isNotEmpty) {
+            items.sort((a, b) => a.ordre.compareTo(b.ordre));
+            debugPrint('[ConfigAbonnementService] ${items.length} plans depuis cache');
+            return items;
+          }
+        }
+      } catch (_) {}
       return kPlansParDefaut.map(PlanConfig.fromMap).toList();
     }
   }
@@ -195,31 +228,40 @@ class ConfigAbonnementService {
         debugPrint('[ConfigAbonnementService] stream: doc absent');
         return kPlansParDefaut.map(PlanConfig.fromMap).toList();
       }
-      try {
-        final items = (doc.data()?['items'] as List?)
-            ?.map((e) => PlanConfig.fromMap(Map<String, dynamic>.from(e as Map)))
-            .toList() ?? [];
-        if (items.isEmpty) {
-          return kPlansParDefaut.map(PlanConfig.fromMap).toList();
-        }
-        items.sort((a, b) => a.ordre.compareTo(b.ordre));
-        debugPrint('[ConfigAbonnementService] stream: ${items.length} plans reçus');
-        return items;
-      } catch (e) {
-        debugPrint('[ConfigAbonnementService] plansStream parse ERROR: $e');
+      final items = _parseItems(doc.data()?['items']);
+      if (items.isEmpty) {
+        debugPrint('[ConfigAbonnementService] stream: items vide');
         return kPlansParDefaut.map(PlanConfig.fromMap).toList();
       }
+      items.sort((a, b) => a.ordre.compareTo(b.ordre));
+      debugPrint('[ConfigAbonnementService] stream: ${items.length} plans reçus');
+      return items;
     });
   }
 
-  // ── Charger config globale ───────────────────────────────────────────────
+  // ── Charger config globale (lecture réseau forcée) ───────────────────────
   static Future<ConfigAbonnementGlobal> chargerGlobal() async {
     try {
-      final doc = await _db.collection(_col).doc('global').get();
+      final doc = await _db.collection(_col).doc('global')
+          .get(const GetOptions(source: Source.server));
       if (!doc.exists) return const ConfigAbonnementGlobal();
-      return ConfigAbonnementGlobal.fromMap(doc.data()!);
+      return ConfigAbonnementGlobal.fromMap(
+        Map<String, dynamic>.fromEntries(
+          doc.data()!.entries.map((e) => MapEntry(e.key.toString(), e.value)),
+        ),
+      );
     } catch (e) {
       debugPrint('[ConfigAbonnementService] chargerGlobal error: $e');
+      try {
+        final docCache = await _db.collection(_col).doc('global').get();
+        if (docCache.exists) {
+          return ConfigAbonnementGlobal.fromMap(
+            Map<String, dynamic>.fromEntries(
+              docCache.data()!.entries.map((e) => MapEntry(e.key.toString(), e.value)),
+            ),
+          );
+        }
+      } catch (_) {}
       return const ConfigAbonnementGlobal();
     }
   }
@@ -229,7 +271,11 @@ class ConfigAbonnementService {
     return _db.collection(_col).doc('global').snapshots().map((doc) {
       if (!doc.exists) return const ConfigAbonnementGlobal();
       try {
-        return ConfigAbonnementGlobal.fromMap(doc.data()!);
+        return ConfigAbonnementGlobal.fromMap(
+          Map<String, dynamic>.fromEntries(
+            doc.data()!.entries.map((e) => MapEntry(e.key.toString(), e.value)),
+          ),
+        );
       } catch (e) {
         debugPrint('[ConfigAbonnementService] globalStream parse ERROR: $e');
         return const ConfigAbonnementGlobal();
@@ -250,15 +296,25 @@ class ConfigAbonnementService {
     await _db.collection(_col).doc('global').set(config.toMap());
   }
 
-  // ── Initialiser avec les plans par défaut ────────────────────────────────
-  static Future<void> _initialiserPlansParDefaut() async {
-    await _db.collection(_col).doc('plans').set({
-      'items': kPlansParDefaut,
-      'updated_at': FieldValue.serverTimestamp(),
-    });
-    await _db.collection(_col).doc('global').set(
-      const ConfigAbonnementGlobal().toMap(),
-    );
+  // ── Initialiser avec les plans par défaut (UNIQUEMENT si vraiment absent) ─
+  // N'est plus appelé automatiquement pour éviter d'écraser les données admin.
+  static Future<void> initialiserSiAbsent() async {
+    try {
+      final doc = await _db.collection(_col).doc('plans')
+          .get(const GetOptions(source: Source.server));
+      if (!doc.exists) {
+        debugPrint('[ConfigAbonnementService] initialisation des plans par défaut');
+        await _db.collection(_col).doc('plans').set({
+          'items': kPlansParDefaut,
+          'updated_at': FieldValue.serverTimestamp(),
+        });
+        await _db.collection(_col).doc('global').set(
+          const ConfigAbonnementGlobal().toMap(),
+        );
+      }
+    } catch (e) {
+      debugPrint('[ConfigAbonnementService] initialiserSiAbsent error: $e');
+    }
   }
 
   // ── Trouver le plan correspondant à un nombre de stands ──────────────────
