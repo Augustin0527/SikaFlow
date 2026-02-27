@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
@@ -16,16 +17,18 @@ class AppProvider extends ChangeNotifier {
   // ignore: unused_field
   final _uuid = const Uuid();
   // late : initialisés dans initialiser() APRÈS Firebase.initializeApp()
-  late final FirebaseAuth _auth;
-  late final FirebaseFirestore _db;
+  late FirebaseAuth _auth;
+  late FirebaseFirestore _db;
+  bool _firebaseInitialise = false;
 
   // ── État global ───────────────────────────────────────────────────────────
   UserModel?       _utilisateurConnecte;
   EntrepriseModel? _entrepriseActive;
   StandModel?      _standActuel; // stand de l'agent connecté
-  // ⚠️ IMPORTANT : _chargement démarre à TRUE pour que le SplashScreen
-  // s'affiche immédiatement dès la création du Provider (avant initialiser()).
-  bool   _chargement = true;
+  // ⚠️ IMPORTANT : _chargement démarre à FALSE.
+  // La LandingPage s'affiche immédiatement.
+  // Le splash n'apparaît que lors d'une tentative de connexion.
+  bool   _chargement = false;
   String? _erreur;
 
   // ── Listes ────────────────────────────────────────────────────────────────
@@ -51,6 +54,7 @@ class AppProvider extends ChangeNotifier {
   // Vérification sécurisée : _auth peut ne pas être encore initialisé
   bool get emailVerifie {
     try {
+      if (!_firebaseInitialise) return false;
       return _auth.currentUser?.emailVerified ?? false;
     } catch (_) {
       return false;
@@ -79,49 +83,47 @@ class AppProvider extends ChangeNotifier {
   List<UserModel> get controleurs => _membres.where((u) => u.role == 'controleur').toList();
   List<StandModel> get standsActifs => _stands.where((s) => s.actif).toList();
 
-  // ── Initialisation ────────────────────────────────────────────────────────
+  // ── Initialisation (appelé uniquement au moment de la connexion) ──────────
   Future<void> initialiser() async {
-    // _chargement est déjà true depuis la construction (voir déclaration).
-    // On notifie pour forcer un premier rebuild qui affiche le splash.
-    notifyListeners();
+    if (_firebaseInitialise) return;
 
-    // Instances Firebase — créées après Firebase.initializeApp() dans main()
+    // Attendre que Firebase soit prêt (initialisé en arrière-plan dans main())
+    for (int i = 0; i < 20; i++) {
+      if (Firebase.apps.isNotEmpty) break;
+      await Future.delayed(const Duration(milliseconds: 300));
+    }
+
+    if (Firebase.apps.isEmpty) {
+      debugPrint('[AppProvider] Firebase toujours pas prêt après attente');
+      return;
+    }
+
     _auth = FirebaseAuth.instance;
     _db   = FirebaseFirestore.instance;
+    _firebaseInitialise = true;
 
-    // ── Timer de sécurité absolu : quoi qu'il arrive, on sort du splash en 8s ──
-    Timer(const Duration(seconds: 8), () {
-      if (_chargement) {
-        debugPrint('[AppProvider] ⏰ Timer sécurité déclenché — forçage fin chargement');
-        _viderEtat();
-      }
-    });
-
+    // Vérifier si l'utilisateur est déjà connecté (session persistante)
     try {
-      // Sur Web, authStateChanges() peut ne jamais se déclencher si
-      // Firebase JS n'est pas encore prêt. On utilise currentUser (synchrone)
-      // qui est disponible immédiatement après initializeApp().
       final currentUser = _auth.currentUser;
-
       if (currentUser != null) {
-        // Utilisateur déjà connecté (session persistée)
+        _setChargement(true);
+        notifyListeners();
         await _chargerProfilFirebase(currentUser.uid);
-      } else {
-        // Pas de session → afficher la landing page
-        _viderEtat();
       }
 
-      // Charger les plans (non bloquant)
-      chargerPlansConfig();
-
-      // Écouter les changements d'auth APRÈS l'init (déconnexion / reconnexion)
+      // Écouter les changements d'auth
       _auth.authStateChanges().listen((User? u) async {
         if (u == null && _utilisateurConnecte != null) {
           _viderEtat();
         } else if (u != null && u.uid != _utilisateurConnecte?.id) {
+          _setChargement(true);
+          notifyListeners();
           await _chargerProfilFirebase(u.uid);
         }
       });
+
+      // Charger les plans config en arrière-plan
+      chargerPlansConfig();
     } catch (e) {
       debugPrint('[AppProvider] initialiser error: $e');
       _viderEtat();
@@ -213,6 +215,17 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Initialiser Firebase si pas encore fait (premier appel après la landing)
+      if (!_firebaseInitialise) {
+        await initialiser();
+      }
+      if (!_firebaseInitialise) {
+        _erreur = 'Connexion impossible. Vérifiez votre connexion internet.';
+        _setChargement(false);
+        notifyListeners();
+        return false;
+      }
+
       final credential = await _auth.signInWithEmailAndPassword(
         email: email.trim(),
         password: motDePasse,
@@ -371,6 +384,13 @@ class AppProvider extends ChangeNotifier {
     String? description,
   }) async {
     try {
+      // Initialiser Firebase si pas encore fait
+      if (!_firebaseInitialise) {
+        await initialiser();
+      }
+      if (!_firebaseInitialise) {
+        return {'success': false, 'message': 'Service indisponible. Vérifiez votre connexion internet.'};
+      }
       // Créer le compte Firebase Auth
       final credential = await _auth.createUserWithEmailAndPassword(
         email: email, password: motDePasse,

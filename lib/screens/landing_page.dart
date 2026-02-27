@@ -22,9 +22,16 @@ class _LandingPageState extends State<LandingPage>
   final ScrollController _scrollController = ScrollController();
   bool _periodeAnnuelle = false;
   final _pricingFmt = NumberFormat('#,###', 'fr_FR');
-  List<PlanConfig>        _plans  = [];
-  ConfigAbonnementGlobal  _cfg    = const ConfigAbonnementGlobal();
-  bool _plansCharges = false;
+  // Plans chargés immédiatement depuis les constantes (pas de Firebase au démarrage)
+  // Mis à jour en arrière-plan depuis Firestore sans bloquer l'affichage
+  List<PlanConfig> _plans = _plansStatiques();
+  ConfigAbonnementGlobal _cfg = const ConfigAbonnementGlobal(
+    dureeEssaiJours: 30,
+    remiseAnnuelle: 0.20,
+    essaiActif: true,
+    messagePromo: '',
+  );
+  bool _plansCharges = true; // Toujours true : on affiche immédiatement les plans statiques
 
   @override
   void initState() {
@@ -47,18 +54,57 @@ class _LandingPageState extends State<LandingPage>
     Future.delayed(const Duration(milliseconds: 400), () {
       if (mounted) _featuresController.forward();
     });
-    // Charger les plans dynamiques depuis Firestore
-    _chargerPlans();
+    // Mise à jour silencieuse depuis Firestore APRÈS le premier affichage
+    // La landing s'affiche immédiatement avec les plans statiques
+    _mettreAJourPlansDepuisFirestore();
   }
 
-  Future<void> _chargerPlans() async {
-    final plans = await ConfigAbonnementService.chargerPlans();
-    final cfg   = await ConfigAbonnementService.chargerGlobal();
-    if (mounted) setState(() {
-      _plans        = plans.where((p) => p.actif).toList();
-      _cfg          = cfg;
-      _plansCharges = true;
-    });
+  // Plans statiques hardcodés — affichés IMMÉDIATEMENT, sans attendre Firebase
+  static List<PlanConfig> _plansStatiques() {
+    return [
+      const PlanConfig(
+        code: 'solo', label: 'Solo', minStands: 1, maxStands: 3,
+        prixMensuel: 3000, description: 'Idéal pour démarrer',
+        couleurHex: 0xFF4CAF50, actif: true, ordre: 1,
+        features: ['1 à 3 stands', 'Tableau de bord complet', 'Gestion des opérations', 'Rapports journaliers', 'Support email'],
+        populaire: false,
+      ),
+      const PlanConfig(
+        code: 'pro', label: 'Pro', minStands: 4, maxStands: 10,
+        prixMensuel: 8000, description: 'Pour les agences en croissance',
+        couleurHex: 0xFFFF6B35, actif: true, ordre: 2,
+        features: ['4 à 10 stands', 'Tout le plan Solo', 'Multi-agents & contrôleurs', 'Alertes automatiques', 'Rapports avancés', 'Support prioritaire'],
+        populaire: true,
+      ),
+      const PlanConfig(
+        code: 'enterprise', label: 'Enterprise', minStands: 11, maxStands: -1,
+        prixMensuel: 15000, description: 'Pour les grandes agences',
+        couleurHex: 0xFFFFCC00, actif: true, ordre: 3,
+        features: ['11+ stands illimités', 'Tout le plan Pro', 'API & intégrations', 'SLA garanti 99.9%', 'Gestionnaire dédié', 'Formation incluse'],
+        populaire: false,
+      ),
+    ];
+  }
+
+  // Mise à jour silencieuse depuis Firestore (n'affecte pas le rendu initial)
+  Future<void> _mettreAJourPlansDepuisFirestore() async {
+    try {
+      // Délai pour laisser Firebase se charger en arrière-plan
+      await Future.delayed(const Duration(seconds: 3));
+      if (!mounted) return;
+      final plans = await ConfigAbonnementService.chargerPlans();
+      final cfg   = await ConfigAbonnementService.chargerGlobal();
+      if (!mounted) return;
+      final plansActifs = plans.where((p) => p.actif).toList();
+      if (plansActifs.isNotEmpty) {
+        setState(() {
+          _plans = plansActifs;
+          _cfg   = cfg;
+        });
+      }
+    } catch (_) {
+      // Silencieux : la page fonctionne déjà avec les données statiques
+    }
   }
 
   @override
