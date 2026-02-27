@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
 import '../models/plan_config_model.dart';
@@ -91,13 +93,23 @@ class _LandingPageState extends State<LandingPage>
 
   // Mise à jour silencieuse depuis Firestore (n'affecte pas le rendu initial)
   Future<void> _mettreAJourDepuisFirestore() async {
-    try {
-      await Future.delayed(const Duration(seconds: 2));
-      if (!mounted) return;
+    // Attendre que Firebase soit prêt (plus long sur web)
+    await Future.delayed(const Duration(seconds: 3));
+    if (!mounted) return;
 
+    // Vérifier que Firebase est réellement initialisé avant tout appel
+    try {
+      if (Firebase.apps.isEmpty) return;
+    } catch (_) {
+      return; // Firebase pas disponible
+    }
+
+    try {
       // Charger les plans d'abonnement
       final plans = await ConfigAbonnementService.chargerPlans();
       final cfg   = await ConfigAbonnementService.chargerGlobal();
+
+      if (!mounted) return;
 
       // Charger la config landing dynamique
       final landingDoc = await FirebaseFirestore.instance
@@ -117,8 +129,10 @@ class _LandingPageState extends State<LandingPage>
           _landingConfig = LandingConfig.fromFirestore(landingDoc.data()!);
         }
       });
-    } catch (_) {
+    } catch (e) {
       // Silencieux : la page fonctionne avec les données statiques
+      // On ne propage pas l'erreur à l'UI
+      if (kDebugMode) debugPrint('[LandingPage] Firestore update skipped: $e');
     }
   }
 

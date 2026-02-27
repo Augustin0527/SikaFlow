@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
@@ -83,14 +84,32 @@ class AppProvider extends ChangeNotifier {
   List<StandModel> get standsActifs => _stands.where((s) => s.actif).toList();
 
   // ── Assure que Firebase est initialisé ──────────────────────────────────────
-  // main() a déjà attendu Firebase.initializeApp() avec await → toujours prêt.
-  // Cette méthode ne peut plus retourner false — on lève une exception si besoin.
+  // Sur Web, Firebase SDK JS peut prendre quelques secondes à charger.
+  // On attend jusqu'à 15s avec des retry toutes les 200ms.
   Future<bool> _ensureFirebase() async {
     if (_authField != null && _dbField != null) return true;
-    // Firebase est garanti initialisé par main() → accès direct
-    _authField = FirebaseAuth.instance;
-    _dbField   = FirebaseFirestore.instance;
-    return true;
+
+    // Attendre que Firebase.apps soit non vide (max 15s)
+    const maxWait = Duration(seconds: 15);
+    const interval = Duration(milliseconds: 200);
+    final deadline = DateTime.now().add(maxWait);
+
+    while (Firebase.apps.isEmpty) {
+      if (DateTime.now().isAfter(deadline)) {
+        debugPrint('[AppProvider] ⚠️ Firebase timeout après 15s');
+        return false;
+      }
+      await Future.delayed(interval);
+    }
+
+    try {
+      _authField = FirebaseAuth.instance;
+      _dbField   = FirebaseFirestore.instance;
+      return true;
+    } catch (e) {
+      debugPrint('[AppProvider] ⚠️ Firebase instances error: $e');
+      return false;
+    }
   }
 
   // ── Initialisation (appelée dans create: du ChangeNotifierProvider) ────────
@@ -244,7 +263,16 @@ class AppProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (e) {
-      _erreur = 'Erreur: $e';
+      // Masquer les erreurs techniques Firebase de l'utilisateur
+      final msg = e.toString();
+      if (msg.contains('no-app') || msg.contains('No Firebase App')) {
+        _erreur = 'Service temporairement indisponible. Veuillez réessayer dans quelques secondes.';
+      } else if (msg.contains('network') || msg.contains('XMLHttpRequest')) {
+        _erreur = 'Pas de connexion internet. Vérifiez votre réseau.';
+      } else {
+        _erreur = 'Connexion impossible. Veuillez réessayer.';
+      }
+      debugPrint('[AppProvider] seConnecter error: $e');
       _setChargement(false);
       notifyListeners();
       return false;
