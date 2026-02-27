@@ -68,28 +68,26 @@
     <div class="spinner"></div>
   </div>
 
+  <!-- Forcer firebase_core_web à utiliser les scripts locaux déjà chargés -->
+  <script>window.flutterfire_web_sdk_version = '11.9.1';</script>
+  <script src="firebase/firebase-app.js" type="module" id="firebase-app-script"></script>
+
   <script>
-    // ── Purge service worker + cache (version v3 — forcé à chaque chargement) ──
-    var SW_VERSION = 'v3';
+    // ── Purge service worker + cache (version v4) ──
+    var SW_VERSION = 'v4';
     var swPurged = sessionStorage.getItem('sw_purged');
     if (swPurged !== SW_VERSION && 'serviceWorker' in navigator) {
-      // Marquer AVANT pour ne pas boucler en cas d'erreur
       sessionStorage.setItem('sw_purged', SW_VERSION);
       Promise.all([
-        // Dé-enregistrer tous les service workers
         navigator.serviceWorker.getRegistrations().then(function(regs) {
           return Promise.all(regs.map(function(r) { return r.unregister(); }));
         }),
-        // Vider tous les caches
         window.caches ? caches.keys().then(function(keys) {
           return Promise.all(keys.map(function(k) { return caches.delete(k); }));
         }) : Promise.resolve()
       ]).then(function() {
-        // Recharger UNE SEULE FOIS avec cache busting
         window.location.replace(window.location.href.split('?')[0] + '?r=' + Date.now());
-      }).catch(function() {
-        // En cas d'erreur, continuer quand même
-      });
+      }).catch(function() {});
     }
 
     window.addEventListener('flutter-first-frame', function() {
