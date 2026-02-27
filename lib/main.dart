@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'firebase_options.dart';
 import 'theme/app_theme.dart';
@@ -22,13 +20,6 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-
-    // Sur Web : désactiver la persistance locale pour toujours lire depuis Firestore
-    if (kIsWeb) {
-      FirebaseFirestore.instance.settings = const Settings(
-        persistenceEnabled: false,
-      );
-    }
   } on FirebaseException catch (e) {
     if (e.code != 'duplicate-app') {
       debugPrint('[SikaFlow] FirebaseException: ${e.code}');

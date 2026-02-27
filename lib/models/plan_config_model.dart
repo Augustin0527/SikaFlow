@@ -165,7 +165,7 @@ class ConfigAbonnementService {
     return result;
   }
 
-  // ── Lecture Firestore (persistenceEnabled:false dans main.dart = toujours réseau) ──
+  // ── Lecture Firestore ─────────────────────────────────────────────────────
   static Future<List<PlanConfig>> chargerPlans() async {
     try {
       final doc = await _db.collection(_col).doc('plans').get();
