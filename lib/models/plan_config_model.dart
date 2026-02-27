@@ -48,16 +48,20 @@ class PlanConfig {
           : '$maxStands stand${maxStands > 1 ? "s" : ""} max';
 
   // ── Sérialisation Firestore ───────────────────────────────────────────────
+  // NOTE : sur Web, Firestore JS SDK retourne tous les nombres comme `num`
+  // (double/JSNumber), jamais comme `int` natif. On utilise donc (num).toInt()
+  // au lieu de `as int` pour éviter un TypeError silencieux qui ferait tomber
+  // la lecture en fallback kPlansParDefaut.
   factory PlanConfig.fromMap(Map<String, dynamic> m) => PlanConfig(
         code:        (m['code']        ?? '') as String,
         label:       (m['label']       ?? '') as String,
-        minStands:   (m['min_stands']  ?? 1)  as int,
-        maxStands:   (m['max_stands']  ?? -1) as int,
-        prixMensuel: (m['prix_mensuel']?? 0)  as int,
+        minStands:   ((m['min_stands']  ?? 1)  as num).toInt(),
+        maxStands:   ((m['max_stands']  ?? -1) as num).toInt(),
+        prixMensuel: ((m['prix_mensuel']?? 0)  as num).toInt(),
         description: (m['description'] ?? '') as String,
-        couleurHex:  (m['couleur_hex'] ?? 0xFF4CAF50) as int,
+        couleurHex:  ((m['couleur_hex'] ?? 0xFF4CAF50) as num).toInt(),
         actif:       (m['actif']       ?? true) as bool,
-        ordre:       (m['ordre']       ?? 0)  as int,
+        ordre:       ((m['ordre']       ?? 0)  as num).toInt(),
       );
 
   Map<String, dynamic> toMap() => {
@@ -113,7 +117,7 @@ class ConfigAbonnementGlobal {
 
   factory ConfigAbonnementGlobal.fromMap(Map<String, dynamic> m) =>
       ConfigAbonnementGlobal(
-        dureeEssaiJours: (m['duree_essai_jours'] ?? 30) as int,
+        dureeEssaiJours: ((m['duree_essai_jours'] ?? 30) as num).toInt(),
         remiseAnnuelle:  ((m['remise_annuelle']  ?? 0.20) as num).toDouble(),
         essaiActif:      (m['essai_actif']       ?? true) as bool,
         messagePromo:    (m['message_promo']     ?? '') as String,
@@ -160,20 +164,26 @@ class ConfigAbonnementService {
     try {
       final doc = await _db.collection(_col).doc('plans').get();
       if (!doc.exists) {
+        debugPrint('[ConfigAbonnementService] plans doc absent → initialisation défaut');
         await _initialiserPlansParDefaut();
         return kPlansParDefaut.map(PlanConfig.fromMap).toList();
       }
-      final items = (doc.data()?['items'] as List?)
-          ?.map((e) => PlanConfig.fromMap(e as Map<String, dynamic>))
-          .toList() ?? [];
+      final rawItems = doc.data()?['items'];
+      final List<dynamic> itemsList = rawItems is List ? rawItems : [];
+      debugPrint('[ConfigAbonnementService] rawItems type=${rawItems.runtimeType} len=${itemsList.length}');
+      final items = itemsList
+          .map((e) => PlanConfig.fromMap(Map<String, dynamic>.from(e as Map)))
+          .toList();
       if (items.isEmpty) {
+        debugPrint('[ConfigAbonnementService] items vide → initialisation défaut');
         await _initialiserPlansParDefaut();
         return kPlansParDefaut.map(PlanConfig.fromMap).toList();
       }
       items.sort((a, b) => a.ordre.compareTo(b.ordre));
+      debugPrint('[ConfigAbonnementService] ${items.length} plans chargés depuis Firestore');
       return items;
-    } catch (e) {
-      debugPrint('[ConfigAbonnementService] chargerPlans error: $e');
+    } catch (e, st) {
+      debugPrint('[ConfigAbonnementService] chargerPlans ERROR: $e\n$st');
       return kPlansParDefaut.map(PlanConfig.fromMap).toList();
     }
   }
@@ -181,13 +191,24 @@ class ConfigAbonnementService {
   // ── Stream en temps réel ─────────────────────────────────────────────────
   static Stream<List<PlanConfig>> plansStream() {
     return _db.collection(_col).doc('plans').snapshots().map((doc) {
-      if (!doc.exists) return kPlansParDefaut.map(PlanConfig.fromMap).toList();
-      final items = (doc.data()?['items'] as List?)
-          ?.map((e) => PlanConfig.fromMap(e as Map<String, dynamic>))
-          .toList() ?? [];
-      if (items.isEmpty) return kPlansParDefaut.map(PlanConfig.fromMap).toList();
-      items.sort((a, b) => a.ordre.compareTo(b.ordre));
-      return items;
+      if (!doc.exists) {
+        debugPrint('[ConfigAbonnementService] stream: doc absent');
+        return kPlansParDefaut.map(PlanConfig.fromMap).toList();
+      }
+      try {
+        final items = (doc.data()?['items'] as List?)
+            ?.map((e) => PlanConfig.fromMap(Map<String, dynamic>.from(e as Map)))
+            .toList() ?? [];
+        if (items.isEmpty) {
+          return kPlansParDefaut.map(PlanConfig.fromMap).toList();
+        }
+        items.sort((a, b) => a.ordre.compareTo(b.ordre));
+        debugPrint('[ConfigAbonnementService] stream: ${items.length} plans reçus');
+        return items;
+      } catch (e) {
+        debugPrint('[ConfigAbonnementService] plansStream parse ERROR: $e');
+        return kPlansParDefaut.map(PlanConfig.fromMap).toList();
+      }
     });
   }
 
@@ -207,7 +228,12 @@ class ConfigAbonnementService {
   static Stream<ConfigAbonnementGlobal> globalStream() {
     return _db.collection(_col).doc('global').snapshots().map((doc) {
       if (!doc.exists) return const ConfigAbonnementGlobal();
-      return ConfigAbonnementGlobal.fromMap(doc.data()!);
+      try {
+        return ConfigAbonnementGlobal.fromMap(doc.data()!);
+      } catch (e) {
+        debugPrint('[ConfigAbonnementService] globalStream parse ERROR: $e');
+        return const ConfigAbonnementGlobal();
+      }
     });
   }
 
