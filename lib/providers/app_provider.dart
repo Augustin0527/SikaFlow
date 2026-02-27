@@ -15,8 +15,9 @@ import '../models/plan_config_model.dart';
 class AppProvider extends ChangeNotifier {
   // ignore: unused_field
   final _uuid = const Uuid();
-  final _auth = FirebaseAuth.instance;
-  final _db   = FirebaseFirestore.instance;
+  // late : initialisés dans initialiser() APRÈS Firebase.initializeApp()
+  late final FirebaseAuth _auth;
+  late final FirebaseFirestore _db;
 
   // ── État global ───────────────────────────────────────────────────────────
   UserModel?       _utilisateurConnecte;
@@ -72,6 +73,11 @@ class AppProvider extends ChangeNotifier {
   // ── Initialisation ────────────────────────────────────────────────────────
   Future<void> initialiser() async {
     _setChargement(true);
+
+    // Initialiser les instances Firebase ICI, après Firebase.initializeApp()
+    // Sur Web, les instances doivent être créées après initializeApp()
+    _auth = FirebaseAuth.instance;
+    _db   = FirebaseFirestore.instance;
 
     try {
       // Attendre le premier événement authStateChanges avec timeout 4s
