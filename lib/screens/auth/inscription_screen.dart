@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../providers/app_provider.dart';
+import '../../router/app_router.dart';
 import '../../theme/app_theme.dart';
-import 'login_screen.dart';
-import '../gestionnaire/gestionnaire_dashboard.dart';
 
 class InscriptionScreen extends StatefulWidget {
   const InscriptionScreen({super.key});
@@ -85,10 +85,8 @@ class _InscriptionScreenState extends State<InscriptionScreen>
       // Rediriger directement vers le dashboard gestionnaire
       // La bannière "email non vérifié" sera affichée dans le dashboard
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const GestionnaireDashboard()),
-        (route) => false,
-      );
+      // go_router redirige automatiquement vers /gestionnaire via refreshListenable
+      // Pas besoin de naviguer manuellement
     } else {
       _showSnack(result['erreur'] ?? 'Erreur lors de la création', isError: true);
     }
@@ -263,9 +261,7 @@ class _InscriptionScreenState extends State<InscriptionScreen>
                     // ── Lien connexion ───────────────────────────────────
                     Center(
                       child: TextButton(
-                        onPressed: () => Navigator.pushReplacement(context,
-                            MaterialPageRoute(
-                                builder: (_) => const LoginScreen())),
+                        onPressed: () => context.go(Routes.connexion),
                         child: const Text(
                           'Déjà un compte ? Se connecter',
                           style: TextStyle(

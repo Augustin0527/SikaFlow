@@ -83,19 +83,14 @@ class AppProvider extends ChangeNotifier {
   List<StandModel> get standsActifs => _stands.where((s) => s.actif).toList();
 
   // ── Assure que Firebase est initialisé ──────────────────────────────────────
-  // SIMPLIFIÉ : main() a déjà attendu Firebase.initializeApp() avec await.
-  // Cette méthode est donc un simple cache des instances.
+  // main() a déjà attendu Firebase.initializeApp() avec await → toujours prêt.
+  // Cette méthode ne peut plus retourner false — on lève une exception si besoin.
   Future<bool> _ensureFirebase() async {
     if (_authField != null && _dbField != null) return true;
-    try {
-      // Firebase.apps est non-vide car main() a attendu l'init
-      _authField = FirebaseAuth.instance;
-      _dbField   = FirebaseFirestore.instance;
-      return true;
-    } catch (e) {
-      debugPrint('[AppProvider] ❌ _ensureFirebase: $e');
-      return false;
-    }
+    // Firebase est garanti initialisé par main() → accès direct
+    _authField = FirebaseAuth.instance;
+    _dbField   = FirebaseFirestore.instance;
+    return true;
   }
 
   // ── Initialisation (appelée dans create: du ChangeNotifierProvider) ────────
@@ -216,14 +211,8 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // S'assurer que Firebase est prêt (attend jusqu'à 15s si nécessaire)
-      final firebaseOk = await _ensureFirebase();
-      if (!firebaseOk) {
-        _erreur = 'Service temporairement indisponible. Réessayez dans quelques instants.';
-        _setChargement(false);
-        notifyListeners();
-        return false;
-      }
+      // Firebase est toujours prêt (initialisé dans main() avant runApp)
+      await _ensureFirebase();
 
       final credential = await _authSafe.signInWithEmailAndPassword(
         email: email.trim(),

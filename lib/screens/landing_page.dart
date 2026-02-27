@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../models/plan_config_model.dart';
-import 'auth/login_screen.dart';
-import 'auth/inscription_screen.dart';
+import '../router/app_router.dart';
 
 class LandingPage extends StatefulWidget {
   const LandingPage({super.key});
@@ -167,10 +167,7 @@ class _LandingPageState extends State<LandingPage>
             actions: [
               // Bouton "Se Connecter" toujours visible (desktop + mobile)
               TextButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                ),
+                onPressed: () => context.go(Routes.connexion),
                 icon: const Icon(Icons.login_rounded, size: 16, color: AppTheme.textSecondary),
                 label: Text(
                   isWide ? 'Se Connecter' : 'Connexion',
@@ -181,11 +178,7 @@ class _LandingPageState extends State<LandingPage>
               Padding(
                 padding: const EdgeInsets.only(right: 12),
                 child: ElevatedButton(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const InscriptionScreen()),
-                  ),
+                  onPressed: () => context.go(Routes.inscription),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.accentOrange,
                     padding: EdgeInsets.symmetric(
@@ -375,11 +368,7 @@ class _LandingPageState extends State<LandingPage>
           runSpacing: 12,
           children: [
             ElevatedButton.icon(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const InscriptionScreen()),
-              ),
+              onPressed: () => context.go(Routes.inscription),
               icon: const Icon(Icons.rocket_launch, size: 18),
               label: const Text('Commencer Gratuitement'),
               style: ElevatedButton.styleFrom(
@@ -397,10 +386,7 @@ class _LandingPageState extends State<LandingPage>
               ),
             ),
             OutlinedButton.icon(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-              ),
+              onPressed: () => context.go(Routes.connexion),
               icon: const Icon(Icons.login, size: 18),
               label: const Text('Se Connecter'),
               style: OutlinedButton.styleFrom(
@@ -1285,9 +1271,7 @@ class _LandingPageState extends State<LandingPage>
                             ),
                             const SizedBox(width: 20),
                             ElevatedButton.icon(
-                              onPressed: () => Navigator.push(context,
-                                  MaterialPageRoute(
-                                      builder: (_) => const InscriptionScreen())),
+                              onPressed: () => context.go(Routes.inscription),
                               icon: const Icon(Icons.rocket_launch_rounded, size: 16),
                               label: const Text('Démarrer l\'essai'),
                               style: ElevatedButton.styleFrom(
@@ -1332,9 +1316,7 @@ class _LandingPageState extends State<LandingPage>
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton.icon(
-                                onPressed: () => Navigator.push(context,
-                                    MaterialPageRoute(
-                                        builder: (_) => const InscriptionScreen())),
+                                onPressed: () => context.go(Routes.inscription),
                                 icon: const Icon(Icons.rocket_launch_rounded, size: 16),
                                 label: const Text('Démarrer l\'essai gratuit'),
                                 style: ElevatedButton.styleFrom(
@@ -1470,8 +1452,7 @@ class _LandingPageState extends State<LandingPage>
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const InscriptionScreen())),
+              onPressed: () => context.go(Routes.inscription),
               icon: const Icon(Icons.rocket_launch_rounded, size: 18),
               label: const Text('Commencer gratuitement'),
               style: OutlinedButton.styleFrom(
@@ -1703,8 +1684,7 @@ class _LandingPageState extends State<LandingPage>
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const InscriptionScreen())),
+              onPressed: () => context.go(Routes.inscription),
               style: ElevatedButton.styleFrom(
                 backgroundColor: isPopular ? color : color.withValues(alpha: 0.9),
                 foregroundColor: plan.couleurHex == 0xFFFFCC00
@@ -2105,11 +2085,7 @@ class _LandingPageState extends State<LandingPage>
             runSpacing: 12,
             children: [
               ElevatedButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => const InscriptionScreen()),
-                ),
+                onPressed: () => context.go(Routes.inscription),
                 icon: const Icon(Icons.rocket_launch, size: 18),
                 label: const Text('Créer mon compte'),
                 style: ElevatedButton.styleFrom(
@@ -2124,10 +2100,7 @@ class _LandingPageState extends State<LandingPage>
                 ),
               ),
               OutlinedButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                ),
+                onPressed: () => context.go(Routes.connexion),
                 icon: const Icon(Icons.login),
                 label: const Text('Me connecter'),
                 style: OutlinedButton.styleFrom(
@@ -2206,10 +2179,7 @@ class _LandingPageState extends State<LandingPage>
               ),
               // Lien discret vers l'espace admin
               TextButton(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                ),
+                onPressed: () => context.go(Routes.connexion),
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 ),

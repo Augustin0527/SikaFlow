@@ -5,7 +5,7 @@ import '../../providers/app_provider.dart';
 import '../../models/operation_model.dart';
 import '../../models/stand_model.dart';
 import '../../models/entreprise_model.dart';
-import '../auth/login_screen.dart';
+import '../../widgets/app_shell.dart';
 import 'stands_screen.dart';
 import 'membres_screen.dart';
 import 'rapports_screen.dart';
@@ -39,59 +39,32 @@ class GestionnaireDashboard extends StatefulWidget {
 class _GestionnaireDashboardState extends State<GestionnaireDashboard>
     with SingleTickerProviderStateMixin {
   int _pageIndex = 0;
-  bool _sidebarOpen = false;
-  late AnimationController _sidebarAnim;
-  late Animation<double> _slideAnim;
   final _fmt = NumberFormat('#,###', 'fr_FR');
 
   String _fmtF(double v) => '${_fmt.format(v)} FCFA';
 
-  final List<_NavItem> _navItems = const [
-    _NavItem(Icons.dashboard_rounded, Icons.dashboard_outlined, 'Tableau de bord'),
-    _NavItem(Icons.store_rounded, Icons.store_outlined, 'Stands'),
-    _NavItem(Icons.receipt_long_rounded, Icons.receipt_long_outlined, 'Opérations'),
-    _NavItem(Icons.people_alt_rounded, Icons.people_alt_outlined, 'Membres'),
-    _NavItem(Icons.bar_chart_rounded, Icons.bar_chart_outlined, 'Rapports'),
-    _NavItem(Icons.percent_rounded, Icons.percent_outlined, 'Ristournes'),
-    _NavItem(Icons.notifications_active_rounded, Icons.notifications_outlined, 'Alertes'),
-    _NavItem(Icons.settings_rounded, Icons.settings_outlined, 'Configuration'),
-    _NavItem(Icons.workspace_premium_rounded, Icons.workspace_premium_outlined, 'Abonnement'),
+  final List<NavItem> _navItems = const [
+    NavItem(Icons.dashboard_outlined, Icons.dashboard_rounded, 'Tableau de bord'),
+    NavItem(Icons.store_outlined, Icons.store_rounded, 'Stands'),
+    NavItem(Icons.receipt_long_outlined, Icons.receipt_long_rounded, 'Opérations'),
+    NavItem(Icons.people_alt_outlined, Icons.people_alt_rounded, 'Membres'),
+    NavItem(Icons.bar_chart_outlined, Icons.bar_chart_rounded, 'Rapports'),
+    NavItem(Icons.percent_outlined, Icons.percent_rounded, 'Ristournes'),
+    NavItem(Icons.notifications_outlined, Icons.notifications_active_rounded, 'Alertes'),
+    NavItem(Icons.settings_outlined, Icons.settings_rounded, 'Configuration'),
+    NavItem(Icons.workspace_premium_outlined, Icons.workspace_premium_rounded, 'Abonnement'),
   ];
 
   @override
   void initState() {
     super.initState();
-    _sidebarAnim = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 250),
-    );
-    _slideAnim = CurvedAnimation(parent: _sidebarAnim, curve: Curves.easeInOut);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AppProvider>().rafraichir();
     });
   }
 
-  @override
-  void dispose() {
-    _sidebarAnim.dispose();
-    super.dispose();
-  }
-
-  void _toggleSidebar() {
-    setState(() => _sidebarOpen = !_sidebarOpen);
-    if (_sidebarOpen) {
-      _sidebarAnim.forward();
-    } else {
-      _sidebarAnim.reverse();
-    }
-  }
-
   void _selectPage(int index) {
-    setState(() {
-      _pageIndex = index;
-      _sidebarOpen = false;
-    });
-    _sidebarAnim.reverse();
+    setState(() => _pageIndex = index);
   }
 
   Widget _buildPage(AppProvider p) {
@@ -118,325 +91,27 @@ class _GestionnaireDashboardState extends State<GestionnaireDashboard>
       final demandes = p.demandesEnAttente;
       final notifCount = alertes.length + demandes.length;
 
-      return Scaffold(
-        backgroundColor: _bg,
-        body: Stack(
+      return AppShell(
+        titre: 'SikaFlow',
+        sousTitre: ent?.nom ?? '',
+        userNom: '${user.prenom} ${user.nom}',
+        userRole: 'Gestionnaire',
+        entrepriseNom: ent?.nom,
+        navItems: _navItems,
+        indexCourant: _pageIndex,
+        onNavChanged: _selectPage,
+        badgeCount: notifCount,
+        onDeconnexion: () => p.seDeconnecter(),
+        page: Column(
           children: [
-            // ── Contenu principal ──────────────────────────────────────────
-            Column(
-              children: [
-                // AppBar custom
-                _buildAppBar(user.prenom, ent?.nom, notifCount, p),
-                // Bannière email non vérifié
-                if (!p.emailVerifie)
-                  _BanniereEmailNonVerifie(provider: p),
-                // Bannière abonnement expirant/expiré
-                if (ent != null)
-                  _BanniereAbonnement(ent: ent, onTap: () => _selectPage(8)),
-                // Body
-                Expanded(
-                  child: _buildPage(p),
-                ),
-              ],
-            ),
-
-            // ── Overlay sidebar ────────────────────────────────────────────
-            if (_sidebarOpen)
-              GestureDetector(
-                onTap: _toggleSidebar,
-                child: Container(color: Colors.black.withValues(alpha: 0.5)),
-              ),
-
-            // ── Sidebar ────────────────────────────────────────────────────
-            AnimatedBuilder(
-              animation: _slideAnim,
-              builder: (_, __) => Transform.translate(
-                offset: Offset(-280 * (1 - _slideAnim.value), 0),
-                child: _buildSidebar(user.prenom, user.nom, ent?.nom, p),
-              ),
-            ),
+            if (!p.emailVerifie) _BanniereEmailNonVerifie(provider: p),
+            if (ent != null) _BanniereAbonnement(ent: ent, onTap: () => _selectPage(8)),
+            Expanded(child: _buildPage(p)),
           ],
         ),
       );
     });
   }
-
-  // ── AppBar ─────────────────────────────────────────────────────────────────
-  Widget _buildAppBar(
-      String prenom, String? entNom, int notifCount, AppProvider p) {
-    return Container(
-      decoration: BoxDecoration(
-        color: _sidebar,
-        border: const Border(bottom: BorderSide(color: _border, width: 1)),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Row(
-            children: [
-              // Burger
-              _IconBtn(
-                icon: Icons.menu_rounded,
-                onTap: _toggleSidebar,
-                badge: notifCount > 0 ? notifCount : null,
-              ),
-              const SizedBox(width: 12),
-              // Logo + titre
-              Container(
-                width: 34, height: 34,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [_orange, _orangeGlow],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.bolt_rounded, color: Colors.white, size: 20),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      entNom ?? 'SikaFlow',
-                      style: const TextStyle(
-                        color: _textPrim, fontSize: 14, fontWeight: FontWeight.bold),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text('Bonjour, $prenom',
-                        style: const TextStyle(color: _textSec, fontSize: 11)),
-                  ],
-                ),
-              ),
-              // Notifications
-              _IconBtn(
-                icon: Icons.notifications_outlined,
-                onTap: () => _voirNotifications(p),
-                badge: notifCount > 0 ? notifCount : null,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── Sidebar ────────────────────────────────────────────────────────────────
-  Widget _buildSidebar(
-      String prenom, String nom, String? entNom, AppProvider p) {
-    return Container(
-      width: 280,
-      height: double.infinity,
-      decoration: const BoxDecoration(
-        color: _sidebar,
-        border: Border(right: BorderSide(color: _border)),
-      ),
-      child: Column(
-        children: [
-          // En-tête profil
-          SafeArea(
-            bottom: false,
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 48, height: 48,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [_orange, _orangeGlow]),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Center(
-                          child: Text(
-                            '${prenom.isNotEmpty ? prenom[0] : '?'}${nom.isNotEmpty ? nom[0] : ''}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold, fontSize: 16),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('$prenom $nom',
-                                style: const TextStyle(
-                                  color: _textPrim,
-                                  fontWeight: FontWeight.bold, fontSize: 14),
-                                overflow: TextOverflow.ellipsis),
-                            Container(
-                              margin: const EdgeInsets.only(top: 4),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: _orange.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Text('Gestionnaire',
-                                  style: TextStyle(
-                                    color: _orange, fontSize: 10,
-                                    fontWeight: FontWeight.bold)),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, color: _textSec, size: 20),
-                        onPressed: _toggleSidebar,
-                      ),
-                    ],
-                  ),
-                  if (entNom != null) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: _surfaceHi,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(children: [
-                        const Icon(Icons.business_rounded,
-                            color: _textSec, size: 14),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(entNom,
-                              style: const TextStyle(
-                                  color: _textSec, fontSize: 12),
-                              overflow: TextOverflow.ellipsis),
-                        ),
-                      ]),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-
-          const Divider(color: _border, height: 1),
-          const SizedBox(height: 8),
-
-          // Navigation items
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              itemCount: _navItems.length,
-              itemBuilder: (_, i) {
-                final item = _navItems[i];
-                final selected = _pageIndex == i;
-                return _buildNavItem(item, i, selected, p);
-              },
-            ),
-          ),
-
-          // Déconnexion
-          const Divider(color: _border, height: 1),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: SafeArea(
-              top: false,
-              child: InkWell(
-                onTap: () {
-                  p.seDeconnecter();
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (_) => const LoginScreen()),
-                    (_) => false,
-                  );
-                },
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: _error.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: _error.withValues(alpha: 0.2)),
-                  ),
-                  child: const Row(children: [
-                    Icon(Icons.logout_rounded, color: _error, size: 20),
-                    SizedBox(width: 12),
-                    Text('Déconnexion',
-                        style: TextStyle(
-                            color: _error, fontWeight: FontWeight.w600)),
-                  ]),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNavItem(_NavItem item, int index, bool selected, AppProvider p) {
-    // Badge pour alertes
-    int? badge;
-    if (index == 6) {
-      final n = p.alertesNonLues.length + p.demandesEnAttente.length;
-      if (n > 0) badge = n;
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: InkWell(
-        onTap: () => _selectPage(index),
-        borderRadius: BorderRadius.circular(12),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: selected
-                ? _orange.withValues(alpha: 0.15)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-            border: selected
-                ? Border.all(color: _orange.withValues(alpha: 0.3))
-                : null,
-          ),
-          child: Row(children: [
-            Icon(
-              selected ? item.iconActive : item.icon,
-              color: selected ? _orange : _textSec,
-              size: 20,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(item.label,
-                  style: TextStyle(
-                    color: selected ? _textPrim : _textSec,
-                    fontWeight: selected
-                        ? FontWeight.w600
-                        : FontWeight.normal,
-                    fontSize: 14,
-                  )),
-            ),
-            if (badge != null)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: _error,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text('$badge',
-                    style: const TextStyle(
-                        color: Colors.white, fontSize: 10,
-                        fontWeight: FontWeight.bold)),
-              ),
-          ]),
-        ),
-      ),
-    );
-  }
-
   // ── Page Dashboard ─────────────────────────────────────────────────────────
   Widget _buildDashboardPage(AppProvider p) {
     final stands = p.standsActifs;
@@ -1321,58 +996,6 @@ class _GestionnaireDashboardState extends State<GestionnaireDashboard>
           ),
         ]),
       ),
-    );
-  }
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-class _NavItem {
-  final IconData iconActive;
-  final IconData icon;
-  final String label;
-  const _NavItem(this.iconActive, this.icon, this.label);
-}
-
-class _IconBtn extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  final int? badge;
-  const _IconBtn({required this.icon, required this.onTap, this.badge});
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(10),
-          child: Container(
-            width: 38, height: 38,
-            decoration: BoxDecoration(
-              color: const Color(0xFF252D3A),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF313D52)),
-            ),
-            child: Icon(icon, color: const Color(0xFFF0F4F8), size: 20),
-          ),
-        ),
-        if (badge != null)
-          Positioned(
-            right: -4, top: -4,
-            child: Container(
-              width: 18, height: 18,
-              decoration: const BoxDecoration(
-                  color: Color(0xFFFF4444), shape: BoxShape.circle),
-              child: Center(
-                child: Text('$badge',
-                    style: const TextStyle(
-                        color: Colors.white, fontSize: 9,
-                        fontWeight: FontWeight.bold)),
-              ),
-            ),
-          ),
-      ],
     );
   }
 }

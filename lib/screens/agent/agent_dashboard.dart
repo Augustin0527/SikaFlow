@@ -6,7 +6,6 @@ import '../../models/stand_model.dart';
 import '../../models/operation_model.dart';
 import '../../models/entreprise_model.dart';
 import '../../theme/app_theme.dart';
-import '../auth/login_screen.dart';
 import 'saisie_operation_screen.dart';
 import 'demande_reequilibrage_screen.dart';
 
@@ -79,10 +78,7 @@ class _AgentDashboardState extends State<AgentDashboard> {
               icon: const Icon(Icons.logout, color: AppTheme.textSecondary),
               onPressed: () {
                 p.seDeconnecter();
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  (_) => false,
-                );
+                // go_router redirige automatiquement via refreshListenable
               },
             ),
           ],

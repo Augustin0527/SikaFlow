@@ -5,7 +5,6 @@ import '../../providers/app_provider.dart';
 import '../../models/operation_model.dart';
 import '../../models/entreprise_model.dart';
 import '../../theme/app_theme.dart';
-import '../auth/login_screen.dart';
 import '../gestionnaire/stands_screen.dart';
 import '../gestionnaire/operations_screen.dart';
 import '../gestionnaire/membres_screen.dart';
@@ -115,10 +114,7 @@ class _ControleurDashboardState extends State<ControleurDashboard> {
               icon: const Icon(Icons.logout, color: _textSec),
               onPressed: () {
                 p.seDeconnecter();
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  (_) => false,
-                );
+                // go_router redirige automatiquement via refreshListenable
               },
             ),
           ],
@@ -416,10 +412,7 @@ class _ControleurDashboardState extends State<ControleurDashboard> {
             onTap: () {
               Navigator.pop(ctx);
               p.seDeconnecter();
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-                (_) => false,
-              );
+              // go_router redirige automatiquement via refreshListenable
             },
           ),
           const SizedBox(height: 8),

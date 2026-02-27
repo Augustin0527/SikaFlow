@@ -1,14 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../providers/app_provider.dart';
 import '../../theme/app_theme.dart';
-import '../gestionnaire/gestionnaire_dashboard.dart';
-import '../agent/agent_dashboard.dart';
-import '../controleur/controleur_dashboard.dart';
-import '../admin/admin_dashboard.dart';
-import '../auth/changer_mdp_screen.dart';
-import 'inscription_screen.dart';
-import 'mot_de_passe_oublie_screen.dart';
+import '../../router/app_router.dart';
 
 class LoginScreen extends StatefulWidget {
   final String? emailPrerempli;
@@ -34,7 +29,6 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void initState() {
     super.initState();
-    // Pré-remplir l'email si venant de l'inscription
     _emailCtrl = TextEditingController(text: widget.emailPrerempli ?? '');
 
     _animCtrl = AnimationController(
@@ -74,41 +68,9 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _chargementLocal = false);
 
     if (ok) {
-      final user = provider.utilisateurConnecte;
-      if (user == null) {
-        _showErreur('Profil introuvable. Contactez l\'administrateur.');
-        return;
-      }
-
-      Widget destination;
-      if (user.motDePasseProvisoire) {
-        destination = const ChangerMotDePasseScreen(obligatoire: true);
-      } else {
-        switch (user.role) {
-          case 'super_admin':
-            destination = const AdminDashboard();
-            break;
-          case 'gestionnaire':
-            destination = const GestionnaireDashboard();
-            break;
-          case 'agent':
-            destination = const AgentDashboard();
-            break;
-          case 'controleur':
-            destination = const ControleurDashboard();
-            break;
-          default:
-            _showErreur('Rôle non reconnu : ${user.role}');
-            return;
-        }
-      }
-
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => destination),
-        (route) => false,
-      );
+      // go_router redirige automatiquement via le redirect + refreshListenable
+      // Pas besoin de naviguer manuellement
     } else {
-      // Plus de blocage pour email non vérifié : message simple
       _showErreur(provider.erreur ?? 'Email ou mot de passe incorrect');
     }
   }
@@ -138,7 +100,6 @@ class _LoginScreenState extends State<LoginScreen>
                   const SizedBox(height: 60),
                   _buildLogo(),
                   const SizedBox(height: 44),
-                  // Message de bienvenue si venant de l'inscription
                   if (widget.emailPrerempli != null) ...[
                     _buildBandeauBienvenue(),
                     const SizedBox(height: 16),
@@ -175,16 +136,12 @@ class _LoginScreenState extends State<LoginScreen>
       ),
       child: const Row(
         children: [
-          Icon(Icons.check_circle_rounded,
-              color: AppTheme.success, size: 20),
+          Icon(Icons.check_circle_rounded, color: AppTheme.success, size: 20),
           SizedBox(width: 10),
           Expanded(
             child: Text(
               'Compte créé avec succès ! Entrez votre mot de passe pour accéder à votre tableau de bord.',
-              style: TextStyle(
-                  color: AppTheme.success,
-                  fontSize: 13,
-                  height: 1.4),
+              style: TextStyle(color: AppTheme.success, fontSize: 13, height: 1.4),
             ),
           ),
         ],
@@ -220,8 +177,7 @@ class _LoginScreenState extends State<LoginScreen>
                 letterSpacing: 0.3)),
         const SizedBox(height: 6),
         const Text('Système de gestion des opérations Mobile Money',
-            style:
-                TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
             textAlign: TextAlign.center),
       ],
     );
@@ -253,8 +209,7 @@ class _LoginScreenState extends State<LoginScreen>
                     fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             const Text('Entrez votre email et mot de passe',
-                style: TextStyle(
-                    color: AppTheme.textSecondary, fontSize: 13)),
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
             const SizedBox(height: 24),
 
             // Email
@@ -271,9 +226,7 @@ class _LoginScreenState extends State<LoginScreen>
                 if (v == null || v.trim().isEmpty) return 'Email requis';
                 final reg = RegExp(
                     r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$');
-                if (!reg.hasMatch(v.trim())) {
-                  return 'Format email invalide';
-                }
+                if (!reg.hasMatch(v.trim())) return 'Format email invalide';
                 return null;
               },
             ),
@@ -290,12 +243,9 @@ class _LoginScreenState extends State<LoginScreen>
                 prefixIcon: const Icon(Icons.lock_outline),
                 suffixIcon: IconButton(
                   icon: Icon(
-                      _passVisible
-                          ? Icons.visibility_off
-                          : Icons.visibility,
+                      _passVisible ? Icons.visibility_off : Icons.visibility,
                       color: AppTheme.textSecondary),
-                  onPressed: () =>
-                      setState(() => _passVisible = !_passVisible),
+                  onPressed: () => setState(() => _passVisible = !_passVisible),
                 ),
               ),
               validator: (v) =>
@@ -307,19 +257,9 @@ class _LoginScreenState extends State<LoginScreen>
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => MotDePasseOublieScreen(
-                      emailInitial: _emailCtrl.text.trim().isNotEmpty
-                          ? _emailCtrl.text.trim()
-                          : null,
-                    ),
-                  ),
-                ),
+                onPressed: () => context.go(Routes.motDePasseOublie),
                 style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 4, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
@@ -368,17 +308,12 @@ class _LoginScreenState extends State<LoginScreen>
     return Column(
       children: [
         const Text('Pas encore de compte ?',
-            style: TextStyle(
-                color: AppTheme.textSecondary, fontSize: 13)),
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
         const SizedBox(height: 10),
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
-            onPressed: () => Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => const InscriptionScreen()),
-            ),
+            onPressed: () => context.go(Routes.inscription),
             icon: const Icon(Icons.add_business_rounded,
                 color: AppTheme.accentOrange),
             label: const Text('Créer mon entreprise',
@@ -386,8 +321,7 @@ class _LoginScreenState extends State<LoginScreen>
                     color: AppTheme.accentOrange,
                     fontWeight: FontWeight.bold)),
             style: OutlinedButton.styleFrom(
-              side:
-                  const BorderSide(color: AppTheme.accentOrange),
+              side: const BorderSide(color: AppTheme.accentOrange),
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
