@@ -15,55 +15,49 @@ import 'screens/controleur/controleur_dashboard.dart';
 import 'screens/admin/admin_dashboard.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ARCHITECTURE "LANDING FIRST"
+// ARCHITECTURE FINALE — Firebase initialisé AVANT runApp, avec timeout 5s
 //
-// Problème résolu : Firebase JS (gstatic.com) блокait le rendu de la landing
-// pendant 2-8 secondes selon la connexion.
-//
-// Solution :
-//   1. runApp() immédiat → la Landing Page s'affiche en < 500ms
-//   2. Firebase s'initialise EN ARRIÈRE-PLAN (unawaited)
-//   3. AppProvider attend que Firebase soit prêt via un Completer
-//   4. La LandingPage ne fait AUCUN appel Firebase (données statiques)
-//   5. Firebase n'est utilisé que lors de la connexion/inscription
+// Sur Web, Firebase.initializeApp() charge des scripts JS depuis gstatic.com.
+// On attend au maximum 5 secondes. Si ça prend plus longtemps (réseau lent),
+// on lance l'app quand même — AppProvider réessaiera à la connexion.
 // ─────────────────────────────────────────────────────────────────────────────
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ① runApp() IMMÉDIAT → LandingPage affichée en < 500ms
-  runApp(const SikaFlowApp());
+  // Tenter d'initialiser Firebase avec un timeout de 5 secondes
+  // → La landing page reste réactive (pas de blocage infini)
+  // → Firebase est prêt pour la grande majorité des connexions normales
+  await _initFirebase().timeout(
+    const Duration(seconds: 5),
+    onTimeout: () {
+      if (kDebugMode) debugPrint('[SikaFlow] ⏳ Firebase timeout 5s — app lancée sans Firebase, retry au login');
+    },
+  );
 
-  // ② Firebase s'initialise EN ARRIÈRE-PLAN (sans bloquer l'UI)
-  _initFirebaseEnArrierePlan();
+  runApp(const SikaFlowApp());
 }
 
-/// Initialise Firebase sans bloquer l'UI.
-Future<void> _initFirebaseEnArrierePlan() async {
+Future<void> _initFirebase() async {
   if (Firebase.apps.isNotEmpty) return;
 
   final options = DefaultFirebaseOptions.currentPlatform;
 
-  for (int tentative = 1; tentative <= 5; tentative++) {
+  for (int tentative = 1; tentative <= 3; tentative++) {
     try {
       await Firebase.initializeApp(options: options);
       if (kDebugMode) debugPrint('[SikaFlow] ✅ Firebase prêt (tentative $tentative)');
       return;
     } on FirebaseException catch (e) {
-      if (e.code == 'duplicate-app') return;
+      if (e.code == 'duplicate-app') return; // déjà initialisé, OK
       if (kDebugMode) debugPrint('[SikaFlow] ⚠️ Firebase T$tentative: ${e.code}');
     } catch (e) {
       if (kDebugMode) debugPrint('[SikaFlow] ⚠️ Firebase T$tentative: $e');
     }
-    if (tentative < 5) {
-      await Future.delayed(Duration(seconds: tentative));
-    }
+    if (tentative < 3) await Future.delayed(const Duration(milliseconds: 800));
   }
-  if (kDebugMode) debugPrint('[SikaFlow] ❌ Firebase non initialisé après 5 tentatives');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Application principale
 // ─────────────────────────────────────────────────────────────────────────────
 
 class SikaFlowApp extends StatelessWidget {
@@ -94,35 +88,20 @@ class AppRouter extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<AppProvider>(
       builder: (ctx, provider, _) {
-        // Chargement en cours → splash (uniquement après tentative de login)
-        if (provider.chargement) {
-          return const _SplashScreen();
-        }
-
-        // Non connecté → LandingPage (affichage immédiat, pas de Firebase)
-        if (!provider.estConnecte) {
-          return const LandingPage();
-        }
+        if (provider.chargement) return const _SplashScreen();
+        if (!provider.estConnecte) return const LandingPage();
 
         final user = provider.utilisateurConnecte!;
-
-        // Mot de passe provisoire → forcer changement
         if (user.motDePasseProvisoire) {
           return const ChangerMotDePasseScreen(obligatoire: true);
         }
 
-        // Routage par rôle
         switch (user.role) {
-          case 'super_admin':
-            return const AdminDashboard();
-          case 'gestionnaire':
-            return const GestionnaireDashboard();
-          case 'agent':
-            return const AgentDashboard();
-          case 'controleur':
-            return const ControleurDashboard();
-          default:
-            return const LoginScreen();
+          case 'super_admin':  return const AdminDashboard();
+          case 'gestionnaire': return const GestionnaireDashboard();
+          case 'agent':        return const AgentDashboard();
+          case 'controleur':   return const ControleurDashboard();
+          default:             return const LoginScreen();
         }
       },
     );
@@ -130,12 +109,11 @@ class AppRouter extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Splash screen animé (affiché uniquement pendant le login)
+// Splash animé
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SplashScreen extends StatefulWidget {
   const _SplashScreen();
-
   @override
   State<_SplashScreen> createState() => _SplashScreenState();
 }
@@ -143,30 +121,19 @@ class _SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<_SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
-  late Animation<double> _fade;
-  late Animation<double> _pulse;
+  late Animation<double> _fade, _pulse;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
-
-    _fade = Tween<double>(begin: 0.4, end: 1.0).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
-    );
-    _pulse = Tween<double>(begin: 0.96, end: 1.04).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
-    );
+    _ctrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))
+      ..repeat(reverse: true);
+    _fade  = Tween<double>(begin: 0.4, end: 1.0).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+    _pulse = Tween<double>(begin: 0.96, end: 1.04).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
   }
 
   @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
+  void dispose() { _ctrl.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
@@ -181,66 +148,30 @@ class _SplashScreenState extends State<_SplashScreen>
               Transform.scale(
                 scale: _pulse.value,
                 child: Container(
-                  width: 88,
-                  height: 88,
+                  width: 88, height: 88,
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(22),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.accentOrange
-                            .withValues(alpha: 0.30 + 0.20 * _ctrl.value),
-                        blurRadius: 24,
-                        spreadRadius: 4,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
+                    boxShadow: [BoxShadow(
+                      color: AppTheme.accentOrange.withValues(alpha: 0.30 + 0.20 * _ctrl.value),
+                      blurRadius: 24, spreadRadius: 4, offset: const Offset(0, 8),
+                    )],
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(22),
-                    child: Image.asset(
-                      'assets/icon/app_icon.png',
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Icon(
-                        Icons.account_balance_wallet,
-                        color: AppTheme.accentOrange,
-                        size: 44,
-                      ),
-                    ),
+                    child: Image.asset('assets/icon/app_icon.png', fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Icon(Icons.account_balance_wallet, color: AppTheme.accentOrange, size: 44)),
                   ),
                 ),
               ),
               const SizedBox(height: 24),
-              const Text(
-                'SikaFlow',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.0,
-                ),
-              ),
+              const Text('SikaFlow', style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: 1.0)),
               const SizedBox(height: 6),
-              Opacity(
-                opacity: _fade.value,
-                child: const Text(
-                  'Connexion en cours…',
-                  style: TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 14,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
+              Opacity(opacity: _fade.value,
+                child: const Text('Connexion en cours…', style: TextStyle(color: AppTheme.textSecondary, fontSize: 14))),
               const SizedBox(height: 40),
-              const SizedBox(
-                width: 36,
-                height: 36,
-                child: CircularProgressIndicator(
-                  color: AppTheme.accentOrange,
-                  strokeWidth: 3,
-                ),
-              ),
+              const SizedBox(width: 36, height: 36,
+                child: CircularProgressIndicator(color: AppTheme.accentOrange, strokeWidth: 3)),
             ],
           ),
         ),

@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
+import '../firebase_options.dart';
 import '../models/user_model.dart';
 import '../models/entreprise_model.dart';
 import '../models/stand_model.dart';
@@ -83,25 +84,38 @@ class AppProvider extends ChangeNotifier {
   List<UserModel> get controleurs => _membres.where((u) => u.role == 'controleur').toList();
   List<StandModel> get standsActifs => _stands.where((s) => s.actif).toList();
 
-  // ── Assure que Firebase est initialisé (appel idempotent) ──────────────────
+  // ── Assure que Firebase est initialisé ──────────────────────────────────────
   Future<bool> _ensureFirebase() async {
-    // Déjà prêt
+    // Cas 1 : déjà initialisé dans cette session
     if (_authField != null && _dbField != null) return true;
+
+    // Cas 2 : Firebase initialisé dans main() avant runApp (cas normal)
     if (Firebase.apps.isNotEmpty) {
       _authField = FirebaseAuth.instance;
       _dbField   = FirebaseFirestore.instance;
       return true;
     }
-    // Attendre jusqu'à 15 secondes (connexions lentes)
-    for (int i = 0; i < 50; i++) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      if (Firebase.apps.isNotEmpty) {
+
+    // Cas 3 : Firebase n'était pas encore prêt au démarrage (réseau très lent)
+    // On réessaie d'initialiser directement ici avec un timeout de 10s
+    try {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      ).timeout(const Duration(seconds: 10));
+      _authField = FirebaseAuth.instance;
+      _dbField   = FirebaseFirestore.instance;
+      return true;
+    } on FirebaseException catch (e) {
+      if (e.code == 'duplicate-app') {
+        // Déjà initialisé (race condition), on prend l'instance
         _authField = FirebaseAuth.instance;
         _dbField   = FirebaseFirestore.instance;
         return true;
       }
+      debugPrint('[AppProvider] ❌ _ensureFirebase FirebaseException: ${e.code}');
+    } catch (e) {
+      debugPrint('[AppProvider] ❌ _ensureFirebase erreur: $e');
     }
-    debugPrint('[AppProvider] ❌ Firebase toujours pas prêt après 15s');
     return false;
   }
 
