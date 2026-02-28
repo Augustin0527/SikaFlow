@@ -84,24 +84,10 @@ class AppProvider extends ChangeNotifier {
   List<StandModel> get standsActifs => _stands.where((s) => s.actif).toList();
 
   // ── Assure que Firebase est initialisé ──────────────────────────────────────
-  // Sur Web, Firebase SDK JS peut prendre quelques secondes à charger.
-  // On attend jusqu'à 15s avec des retry toutes les 200ms.
+  // Le SDK Firebase JS est chargé dans index.html AVANT Flutter.
+  // Firebase.initializeApp() dans main() est donc garanti prêt ici.
   Future<bool> _ensureFirebase() async {
     if (_authField != null && _dbField != null) return true;
-
-    // Attendre que Firebase.apps soit non vide (max 15s)
-    const maxWait = Duration(seconds: 15);
-    const interval = Duration(milliseconds: 200);
-    final deadline = DateTime.now().add(maxWait);
-
-    while (Firebase.apps.isEmpty) {
-      if (DateTime.now().isAfter(deadline)) {
-        debugPrint('[AppProvider] ⚠️ Firebase timeout après 15s');
-        return false;
-      }
-      await Future.delayed(interval);
-    }
-
     try {
       _authField = FirebaseAuth.instance;
       _dbField   = FirebaseFirestore.instance;

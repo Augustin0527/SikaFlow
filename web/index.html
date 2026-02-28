@@ -68,7 +68,31 @@
     <div class="spinner"></div>
   </div>
 
+  <!-- ═══════════════════════════════════════════════════════════
+       FIREBASE SDK — doit être chargé AVANT Flutter
+       ════════════════════════════════════════════════════════════ -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+
   <script>
+    // ── Initialisation Firebase JS avant Flutter ──────────────────────────
+    const firebaseConfig = {
+      apiKey:            "AIzaSyApGdz7u5i10Fytoz6hcej63rVTKeH9Ivg",
+      authDomain:        "sikaflow-c8869.firebaseapp.com",
+      projectId:         "sikaflow-c8869",
+      storageBucket:     "sikaflow-c8869.firebasestorage.app",
+      messagingSenderId: "246919869370",
+      appId:             "1:246919869370:web:c3cc3102876ac1e8252383",
+      measurementId:     "G-RBJDZRDCWE"
+    };
+
+    // Initialiser seulement si pas déjà fait (hot-reload)
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+
     // Masquer l'écran de chargement HTML quand Flutter est prêt
     window.addEventListener('flutter-first-frame', function() {
       var loading = document.getElementById('loading');
