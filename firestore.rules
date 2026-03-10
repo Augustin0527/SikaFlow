@@ -3,72 +3,163 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ── Fonctions utilitaires ─────────────────────────────────────────────
+
     function estAuthentifie() {
       return request.auth != null;
     }
 
+    function profil() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
     function estSuperAdmin() {
-      return request.auth != null
+      return estAuthentifie()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super_admin';
+        && profil().role == 'super_admin';
     }
 
     function estGestionnaire() {
-      return request.auth != null
+      return estAuthentifie()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'gestionnaire';
+        && profil().role == 'gestionnaire';
+    }
+
+    function monEntrepriseId() {
+      return estAuthentifie()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? profil().get('entreprise_id', null)
+        : null;
     }
 
     function estMembreDeLEntreprise(entrepriseId) {
-      return request.auth != null
+      return estAuthentifie()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.entreprise_id == entrepriseId;
+        && profil().get('entreprise_id', null) == entrepriseId;
     }
 
-    // ── OTP verifications — accessible sans authentification (inscription) ──
+    function estGestionnaireDeEntreprise(entrepriseId) {
+      return estGestionnaire() && estMembreDeLEntreprise(entrepriseId);
+    }
+
+    // Vérifie que resource.data.entreprise_id == entreprise du requérant
+    function membreDoc() {
+      return estAuthentifie()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && resource.data.get('entreprise_id', null) == monEntrepriseId();
+    }
+
+    // Vérifie que request.resource.data.entreprise_id == entreprise du requérant (création)
+    function membreDocCreate() {
+      return estAuthentifie()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && request.resource.data.get('entreprise_id', null) == monEntrepriseId();
+    }
+
+    // ── OTP verifications ─────────────────────────────────────────────────
     match /otp_verifications/{email} {
-      allow read, write: if true;
+      allow create: if true;
+      allow read, update, delete: if false;
     }
 
-    // ── Users — lecture par tout utilisateur authentifié, écriture par soi-même ou super_admin ──
+    // ── Users ─────────────────────────────────────────────────────────────
     match /users/{userId} {
-      allow read: if estAuthentifie();
-      allow write: if estAuthentifie() && (request.auth.uid == userId || estSuperAdmin());
+      allow read: if estAuthentifie() && (
+        request.auth.uid == userId ||
+        estSuperAdmin() ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         exists(/databases/$(database)/documents/users/$(userId)) &&
+         profil().get('entreprise_id', null) ==
+           get(/databases/$(database)/documents/users/$(userId)).data.get('entreprise_id', ''))
+      );
+      allow create: if estSuperAdmin() ||
+        (estAuthentifie() && request.auth.uid == userId);
+      allow update: if estAuthentifie() && (request.auth.uid == userId || estSuperAdmin());
+      allow delete: if estSuperAdmin();
     }
 
-    // ── Entreprises — lecture/écriture par membres ou super_admin ──────────
+    // ── Entreprises ───────────────────────────────────────────────────────
     match /entreprises/{entrepriseId} {
-      allow read: if estAuthentifie();
-      allow write: if estAuthentifie();
+      allow read: if estSuperAdmin() || estMembreDeLEntreprise(entrepriseId);
+      allow create: if estSuperAdmin() || estGestionnaire() ||
+        (estAuthentifie() && request.resource.data.get('gestionnaire_id', null) == request.auth.uid);
+      allow update, delete: if estSuperAdmin() || estGestionnaireDeEntreprise(entrepriseId);
 
-      // Sous-collections de l'entreprise
       match /{subcollection}/{docId} {
-        allow read, write: if estAuthentifie();
+        allow read: if estSuperAdmin() || estMembreDeLEntreprise(entrepriseId);
+        allow write: if estSuperAdmin() || estGestionnaireDeEntreprise(entrepriseId);
       }
     }
 
-    // ── Configuration des abonnements — lecture publique (auth), écriture super_admin uniquement ──
+    // ── Stands (collection racine) ────────────────────────────────────────
+    match /stands/{standId} {
+      allow read: if estSuperAdmin() || membreDoc();
+      allow create: if estSuperAdmin() || (estGestionnaire() && membreDocCreate());
+      allow update: if estSuperAdmin() || (estAuthentifie() && membreDoc());
+      allow delete: if estSuperAdmin() || (estGestionnaire() && membreDoc());
+    }
+
+    // ── Opérations ────────────────────────────────────────────────────────
+    match /operations/{operationId} {
+      allow read: if estSuperAdmin() || membreDoc();
+      allow create: if estAuthentifie() && membreDocCreate();
+      allow update: if estSuperAdmin() || (estAuthentifie() && membreDoc());
+      allow delete: if estSuperAdmin();
+    }
+
+    // ── Taux de ristourne ─────────────────────────────────────────────────
+    match /taux_ristourne/{tauxId} {
+      allow read: if estSuperAdmin() || membreDoc();
+      allow create: if estSuperAdmin() || (estGestionnaire() && membreDocCreate());
+      allow update, delete: if estSuperAdmin() || (estGestionnaire() && membreDoc());
+    }
+
+    // ── Alertes ───────────────────────────────────────────────────────────
+    match /alertes/{alerteId} {
+      allow read: if estSuperAdmin() || membreDoc();
+      allow create: if estAuthentifie() && membreDocCreate();
+      allow update: if estAuthentifie() && membreDoc();
+      allow delete: if estSuperAdmin();
+    }
+
+    // ── Demandes de rééquilibrage ─────────────────────────────────────────
+    match /demandes_reequilibrage/{demandeId} {
+      allow read: if estSuperAdmin() || membreDoc();
+      allow create: if estAuthentifie() && membreDocCreate();
+      allow update: if estSuperAdmin() || (estAuthentifie() && membreDoc());
+      allow delete: if estSuperAdmin();
+    }
+
+    // ── Mouvements de capital ─────────────────────────────────────────────
+    match /mouvements_capital/{mouvementId} {
+      allow read: if estSuperAdmin() || membreDoc();
+      allow create: if estAuthentifie() && membreDocCreate();
+      allow update, delete: if estSuperAdmin();
+    }
+
+    // ── Configuration des abonnements ─────────────────────────────────────
     match /config_abonnement/{docId} {
-      allow read: if estAuthentifie();
+      allow read: if true;
       allow write: if estSuperAdmin();
     }
 
-    // ── Abonnements — gestion par super_admin ou gestionnaire concerné ─────
+    // ── Configuration Landing Page ────────────────────────────────────────
+    match /config_landing/{docId} {
+      allow read: if true;
+      allow write: if estSuperAdmin();
+    }
+
+    // ── Abonnements ───────────────────────────────────────────────────────
     match /abonnements/{abonnementId} {
-      allow read: if estAuthentifie();
-      allow write: if estAuthentifie();
+      allow read: if estSuperAdmin() || membreDoc();
+      allow create: if estSuperAdmin() || (estGestionnaire() && membreDocCreate());
+      allow update, delete: if estSuperAdmin() || (estGestionnaire() && membreDoc());
     }
 
-    // ── Transactions / Paiements — super_admin ou gestionnaire ────────────
+    // ── Transactions FedaPay ──────────────────────────────────────────────
     match /transactions/{transactionId} {
-      allow read: if estAuthentifie();
-      allow write: if estAuthentifie();
-    }
-
-    // ── Toutes les autres collections — authentification requise ───────────
-    // Note : {document=**} couvre TOUS les niveaux de hiérarchie
-    match /{document=**} {
-      allow read, write: if estAuthentifie();
+      allow read: if estSuperAdmin() || membreDoc();
+      allow create: if estAuthentifie() && membreDocCreate();
+      allow update, delete: if estSuperAdmin();
     }
   }
 }

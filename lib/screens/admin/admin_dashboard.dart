@@ -8,6 +8,7 @@ import '../../theme/app_theme.dart';
 import 'admin_entreprise_detail.dart';
 import 'admin_abonnement_screen.dart';
 import 'admin_plans_config_screen.dart';
+import 'admin_landing_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -26,7 +27,7 @@ class _AdminDashboardState extends State<AdminDashboard>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _chargerStats());
   }
 
@@ -116,6 +117,7 @@ class _AdminDashboardState extends State<AdminDashboard>
             Tab(icon: Icon(Icons.business, size: 18), text: 'Entreprises'),
             Tab(icon: Icon(Icons.payment, size: 18), text: 'Abonnements'),
             Tab(icon: Icon(Icons.settings_rounded, size: 18), text: 'Plans'),
+            Tab(icon: Icon(Icons.web, size: 18), text: 'Landing Page'),
           ],
         ),
       ),
@@ -126,6 +128,7 @@ class _AdminDashboardState extends State<AdminDashboard>
           _buildEntreprises(),
           _buildAbonnements(),
           const AdminPlansConfigScreen(),
+          const AdminLandingScreen(),
         ],
       ),
     );

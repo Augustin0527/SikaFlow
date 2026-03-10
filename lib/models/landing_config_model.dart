@@ -300,6 +300,98 @@ class ContactConfig {
       );
 }
 
+// ─── En-tête de section ───────────────────────────────────────────────────────
+class SectionHeaderConfig {
+  final String badge;
+  final String titre;
+  final String description;
+
+  const SectionHeaderConfig({
+    required this.badge,
+    required this.titre,
+    required this.description,
+  });
+
+  factory SectionHeaderConfig.fromMap(Map<String, dynamic> d) => SectionHeaderConfig(
+    badge: d['badge'] as String? ?? '',
+    titre: d['titre'] as String? ?? '',
+    description: d['description'] as String? ?? '',
+  );
+
+  Map<String, dynamic> toMap() => {'badge': badge, 'titre': titre, 'description': description};
+
+  SectionHeaderConfig copyWith({String? badge, String? titre, String? description}) =>
+    SectionHeaderConfig(
+      badge: badge ?? this.badge,
+      titre: titre ?? this.titre,
+      description: description ?? this.description,
+    );
+}
+
+// ─── Feature (Fonctionnalité) ─────────────────────────────────────────────────
+class FeatureConfig {
+  final String titre;
+  final String description;
+
+  const FeatureConfig({required this.titre, required this.description});
+
+  factory FeatureConfig.fromMap(Map<String, dynamic> d) => FeatureConfig(
+    titre: d['titre'] as String? ?? '',
+    description: d['description'] as String? ?? '',
+  );
+
+  Map<String, dynamic> toMap() => {'titre': titre, 'description': description};
+
+  FeatureConfig copyWith({String? titre, String? description}) =>
+    FeatureConfig(titre: titre ?? this.titre, description: description ?? this.description);
+}
+
+// ─── Étape (Comment ça marche) ────────────────────────────────────────────────
+class EtapeConfig {
+  final String titre;
+  final String description;
+
+  const EtapeConfig({required this.titre, required this.description});
+
+  factory EtapeConfig.fromMap(Map<String, dynamic> d) => EtapeConfig(
+    titre: d['titre'] as String? ?? '',
+    description: d['description'] as String? ?? '',
+  );
+
+  Map<String, dynamic> toMap() => {'titre': titre, 'description': description};
+
+  EtapeConfig copyWith({String? titre, String? description}) =>
+    EtapeConfig(titre: titre ?? this.titre, description: description ?? this.description);
+}
+
+// ─── Rôle ─────────────────────────────────────────────────────────────────────
+class RoleConfig {
+  final String titre;
+  final String sousTitre;
+  final List<String> permissions;
+
+  const RoleConfig({required this.titre, required this.sousTitre, required this.permissions});
+
+  factory RoleConfig.fromMap(Map<String, dynamic> d) => RoleConfig(
+    titre: d['titre'] as String? ?? '',
+    sousTitre: d['sousTitre'] as String? ?? '',
+    permissions: ((d['permissions'] as List?) ?? []).map((e) => e.toString()).toList(),
+  );
+
+  Map<String, dynamic> toMap() => {
+    'titre': titre,
+    'sousTitre': sousTitre,
+    'permissions': permissions,
+  };
+
+  RoleConfig copyWith({String? titre, String? sousTitre, List<String>? permissions}) =>
+    RoleConfig(
+      titre: titre ?? this.titre,
+      sousTitre: sousTitre ?? this.sousTitre,
+      permissions: permissions ?? this.permissions,
+    );
+}
+
 // ─── Modèle global de config Landing ─────────────────────────────────────────
 class LandingConfig {
   final HeroConfig hero;
@@ -309,6 +401,15 @@ class LandingConfig {
   final List<TemoignageConfig> temoignages;
   final bool maintenanceMode;
   final String messagesMaintenance;
+  // Fonctionnalités
+  final List<FeatureConfig> features;
+  final SectionHeaderConfig featuresHeader;
+  // Étapes
+  final List<EtapeConfig> etapes;
+  final SectionHeaderConfig etapesHeader;
+  // Rôles
+  final List<RoleConfig> roles;
+  final SectionHeaderConfig rolesHeader;
 
   const LandingConfig({
     this.hero = const HeroConfig(),
@@ -318,6 +419,24 @@ class LandingConfig {
     this.temoignages = const [],
     this.maintenanceMode = false,
     this.messagesMaintenance = 'Site en maintenance, revenez bientôt.',
+    this.features = const [],
+    this.featuresHeader = const SectionHeaderConfig(
+      badge: 'Fonctionnalités',
+      titre: 'Tout ce dont vous avez besoin',
+      description: 'Une plateforme complète pour gérer toutes vos opérations Mobile Money au Bénin.',
+    ),
+    this.etapes = const [],
+    this.etapesHeader = const SectionHeaderConfig(
+      badge: 'Comment ça marche',
+      titre: 'Simple et rapide',
+      description: 'Démarrez en 3 étapes simples et commencez à gérer vos opérations dès aujourd\'hui.',
+    ),
+    this.roles = const [],
+    this.rolesHeader = const SectionHeaderConfig(
+      badge: 'Gestion des rôles',
+      titre: 'Chaque acteur à sa place',
+      description: 'SikaFlow adapte l\'interface et les permissions selon le rôle de chaque membre de votre équipe.',
+    ),
   });
 
   // ── Valeurs par défaut ─────────────────────────────────────────────────────
@@ -369,6 +488,96 @@ class LandingConfig {
             etoiles: 5,
           ),
         ],
+        features: const [
+          FeatureConfig(
+            titre: 'Synchronisation en temps réel',
+            description: 'Toutes les opérations sont synchronisées instantanément entre tous vos agents et gestionnaires, où qu\'ils soient.',
+          ),
+          FeatureConfig(
+            titre: 'Vos données, votre espace',
+            description: 'Votre agence dispose d\'un espace dédié et sécurisé. Vos données sont privées et accessibles uniquement par votre équipe.',
+          ),
+          FeatureConfig(
+            titre: 'Gestion des rôles',
+            description: 'Attribuez des rôles précis — Gestionnaire, Agent, Contrôleur — avec des accès adaptés à chaque profil de votre équipe.',
+          ),
+          FeatureConfig(
+            titre: 'Rapports automatiques',
+            description: 'Générez des rapports journaliers, hebdomadaires et mensuels en un clic. Suivez l\'évolution de chaque opération.',
+          ),
+          FeatureConfig(
+            titre: 'Suivi des ristournes',
+            description: 'Calculez automatiquement les commissions MTN, Moov et Celtiis et gérez les ristournes de vos agents.',
+          ),
+          FeatureConfig(
+            titre: 'Alertes & Notifications',
+            description: 'Recevez des alertes en temps réel pour les opérations critiques et les seuils de solde importants de votre agence.',
+          ),
+        ],
+        featuresHeader: const SectionHeaderConfig(
+          badge: 'Fonctionnalités',
+          titre: 'Tout ce dont vous avez besoin',
+          description: 'Une plateforme complète pour gérer toutes vos opérations Mobile Money au Bénin.',
+        ),
+        etapes: const [
+          EtapeConfig(
+            titre: 'Inscription',
+            description: 'Créez votre compte entreprise en quelques minutes. Essai gratuit de 30 jours sans carte bancaire.',
+          ),
+          EtapeConfig(
+            titre: 'Ajoutez vos agents',
+            description: 'Invitez vos agents, contrôleurs et gestionnaires. Chacun reçoit un accès adapté à son rôle.',
+          ),
+          EtapeConfig(
+            titre: 'Gérez & suivez',
+            description: 'Suivez en temps réel toutes les opérations MTN, Moov et Celtiis depuis votre tableau de bord.',
+          ),
+        ],
+        etapesHeader: const SectionHeaderConfig(
+          badge: 'Comment ça marche',
+          titre: 'Simple et rapide',
+          description: 'Démarrez en 3 étapes simples et commencez à gérer vos opérations dès aujourd\'hui.',
+        ),
+        roles: const [
+          RoleConfig(
+            titre: 'Gestionnaire',
+            sousTitre: 'Chef d\'agence',
+            permissions: [
+              'Tableau de bord complet de l\'agence',
+              'Suivi des agents et des opérations',
+              'Rapports financiers journaliers',
+              'Gestion des retraits et ristournes',
+              'Ajout et gestion de l\'équipe',
+            ],
+          ),
+          RoleConfig(
+            titre: 'Contrôleur',
+            sousTitre: 'Superviseur terrain',
+            permissions: [
+              'Validation des points journaliers',
+              'Calcul automatique des ristournes',
+              'Supervision des agents assignés',
+              'Rapports de contrôle détaillés',
+              'Historique des validations',
+            ],
+          ),
+          RoleConfig(
+            titre: 'Agent',
+            sousTitre: 'Opérateur terrain',
+            permissions: [
+              'Saisie des opérations quotidiennes',
+              'Suivi de son solde en temps réel',
+              'Historique de ses transactions',
+              'Rapport journalier personnel',
+              'Accès MTN, Moov et Celtiis',
+            ],
+          ),
+        ],
+        rolesHeader: const SectionHeaderConfig(
+          badge: 'Gestion des rôles',
+          titre: 'Chaque acteur à sa place',
+          description: 'SikaFlow adapte l\'interface et les permissions selon le rôle de chaque membre de votre équipe.',
+        ),
       );
 
   factory LandingConfig.fromFirestore(Map<String, dynamic> d) {
@@ -386,6 +595,26 @@ class LandingConfig {
         .map((e) => TemoignageConfig.fromMap(
             Map<String, dynamic>.from(e.value as Map), 't${e.key}'))
         .toList();
+
+    // Fonctionnalités
+    final rawFeatures = d['features'] as List? ?? [];
+    final features = rawFeatures
+        .map((e) => FeatureConfig.fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList();
+
+    // Étapes
+    final rawEtapes = d['etapes'] as List? ?? [];
+    final etapes = rawEtapes
+        .map((e) => EtapeConfig.fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList();
+
+    // Rôles
+    final rawRoles = d['roles'] as List? ?? [];
+    final roles = rawRoles
+        .map((e) => RoleConfig.fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList();
+
+    final defaut = LandingConfig.defaut();
 
     return LandingConfig(
       hero: d['hero'] != null
@@ -410,6 +639,18 @@ class LandingConfig {
       maintenanceMode: d['maintenanceMode'] as bool? ?? false,
       messagesMaintenance:
           d['messagesMaintenance'] as String? ?? 'Site en maintenance.',
+      features: features.isNotEmpty ? features : defaut.features,
+      featuresHeader: d['featuresHeader'] != null
+          ? SectionHeaderConfig.fromMap(Map<String, dynamic>.from(d['featuresHeader'] as Map))
+          : defaut.featuresHeader,
+      etapes: etapes.isNotEmpty ? etapes : defaut.etapes,
+      etapesHeader: d['etapesHeader'] != null
+          ? SectionHeaderConfig.fromMap(Map<String, dynamic>.from(d['etapesHeader'] as Map))
+          : defaut.etapesHeader,
+      roles: roles.isNotEmpty ? roles : defaut.roles,
+      rolesHeader: d['rolesHeader'] != null
+          ? SectionHeaderConfig.fromMap(Map<String, dynamic>.from(d['rolesHeader'] as Map))
+          : defaut.rolesHeader,
     );
   }
 
@@ -421,6 +662,12 @@ class LandingConfig {
         'temoignages': temoignages.map((t) => t.toMap()).toList(),
         'maintenanceMode': maintenanceMode,
         'messagesMaintenance': messagesMaintenance,
+        'features': features.map((f) => f.toMap()).toList(),
+        'featuresHeader': featuresHeader.toMap(),
+        'etapes': etapes.map((e) => e.toMap()).toList(),
+        'etapesHeader': etapesHeader.toMap(),
+        'roles': roles.map((r) => r.toMap()).toList(),
+        'rolesHeader': rolesHeader.toMap(),
         'updated_at': FieldValue.serverTimestamp(),
       };
 }

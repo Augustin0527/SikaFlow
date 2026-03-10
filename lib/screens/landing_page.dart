@@ -35,7 +35,7 @@ class _LandingPageState extends State<LandingPage>
     essaiActif: true,
     messagePromo: '',
   );
-  bool _plansCharges = true;
+  final bool _plansCharges = true;
   // Config dynamique landing (hero, contact, témoignages, footer)
   LandingConfig _landingConfig = LandingConfig.defaut();
 
@@ -736,50 +736,32 @@ class _LandingPageState extends State<LandingPage>
   // FEATURES SECTION
   // ════════════════════════════════════════════════════════════════════════════
   Widget _buildFeaturesSection(bool isWide) {
-    final features = [
-      _FeatureData(
-        icon: Icons.sync_rounded,
-        color: AppTheme.accentOrange,
-        title: 'Synchronisation en temps réel',
-        description:
-            'Toutes les opérations sont synchronisées instantanément entre tous vos agents et gestionnaires, où qu\'ils soient.',
-      ),
-      _FeatureData(
-        icon: Icons.verified_user_rounded,
-        color: AppTheme.moovBlue,
-        title: 'Vos données, votre espace',
-        description:
-            'Votre agence dispose d\'un espace dédié et sécurisé. Vos données sont privées et accessibles uniquement par votre équipe.',
-      ),
-      _FeatureData(
-        icon: Icons.people_alt_rounded,
-        color: AppTheme.success,
-        title: 'Gestion des rôles',
-        description:
-            'Attribuez des rôles précis — Gestionnaire, Agent, Contrôleur — avec des accès adaptés à chaque profil de votre équipe.',
-      ),
-      _FeatureData(
-        icon: Icons.bar_chart_rounded,
-        color: AppTheme.mtnYellow,
-        title: 'Rapports automatiques',
-        description:
-            'Générez des rapports journaliers, hebdomadaires et mensuels en un clic. Suivez l\'évolution de chaque opération.',
-      ),
-      _FeatureData(
-        icon: Icons.account_balance_wallet_rounded,
-        color: AppTheme.celtiisRed,
-        title: 'Suivi des ristournes',
-        description:
-            'Calculez automatiquement les commissions MTN, Moov et Celtiis et gérez les ristournes de vos agents.',
-      ),
-      _FeatureData(
-        icon: Icons.notifications_active_rounded,
-        color: const Color(0xFF9C27B0),
-        title: 'Alertes & Notifications',
-        description:
-            'Recevez des alertes en temps réel pour les opérations critiques et les seuils de solde importants de votre agence.',
-      ),
+    // Icônes et couleurs hardcodées — seuls titres/descriptions viennent de Firestore
+    const iconesCouleurs = [
+      (Icons.sync_rounded, AppTheme.accentOrange),
+      (Icons.verified_user_rounded, AppTheme.moovBlue),
+      (Icons.people_alt_rounded, AppTheme.success),
+      (Icons.bar_chart_rounded, AppTheme.mtnYellow),
+      (Icons.account_balance_wallet_rounded, AppTheme.celtiisRed),
+      (Icons.notifications_active_rounded, Color(0xFF9C27B0)),
     ];
+
+    final defaut = LandingConfig.defaut();
+    final featuresSource = _landingConfig.features.isNotEmpty
+        ? _landingConfig.features
+        : defaut.features;
+
+    final features = List.generate(iconesCouleurs.length, (i) {
+      final source = i < featuresSource.length ? featuresSource[i] : defaut.features[i];
+      return _FeatureData(
+        icon: iconesCouleurs[i].$1,
+        color: iconesCouleurs[i].$2,
+        title: source.titre,
+        description: source.description,
+      );
+    });
+
+    final header = _landingConfig.featuresHeader;
 
     return Container(
       padding: EdgeInsets.symmetric(
@@ -787,9 +769,9 @@ class _LandingPageState extends State<LandingPage>
       child: Column(
         children: [
           _sectionHeader(
-            'Tout ce dont vous avez besoin',
-            'Fonctionnalités',
-            'Une plateforme complète pour gérer toutes vos opérations Mobile Money au Bénin.',
+            header.titre,
+            header.badge,
+            header.description,
           ),
           const SizedBox(height: 56),
           FadeTransition(
@@ -867,6 +849,20 @@ class _LandingPageState extends State<LandingPage>
   // HOW IT WORKS
   // ════════════════════════════════════════════════════════════════════════════
   Widget _buildHowItWorksSection(bool isWide) {
+    // Icônes hardcodées — titres/descriptions viennent de Firestore
+    const icones = [
+      Icons.app_registration_rounded,
+      Icons.group_add_rounded,
+      Icons.trending_up_rounded,
+    ];
+
+    final defaut = LandingConfig.defaut();
+    final etapesSource = _landingConfig.etapes.isNotEmpty
+        ? _landingConfig.etapes
+        : defaut.etapes;
+
+    final header = _landingConfig.etapesHeader;
+
     return Container(
       color: AppTheme.cardDarker,
       padding: EdgeInsets.symmetric(
@@ -874,41 +870,39 @@ class _LandingPageState extends State<LandingPage>
       child: Column(
         children: [
           _sectionHeader(
-            'Simple et rapide',
-            'Comment ça marche',
-            'Démarrez en 3 étapes simples et commencez à gérer vos opérations dès aujourd\'hui.',
+            header.titre,
+            header.badge,
+            header.description,
           ),
           const SizedBox(height: 56),
           isWide
               ? Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
+                    for (int i = 0; i < icones.length; i++) ...[
+                      if (i > 0) _stepArrow(),
+                      Expanded(
                         child: _stepCard(
-                            1, Icons.app_registration_rounded, 'Inscription',
-                            'Créez votre compte entreprise en quelques minutes. Essai gratuit de 30 jours sans carte bancaire.')),
-                    _stepArrow(),
-                    Expanded(
-                        child: _stepCard(
-                            2, Icons.group_add_rounded, 'Ajoutez vos agents',
-                            'Invitez vos agents, contrôleurs et gestionnaires. Chacun reçoit un accès adapté à son rôle.')),
-                    _stepArrow(),
-                    Expanded(
-                        child: _stepCard(
-                            3, Icons.trending_up_rounded, 'Gérez & suivez',
-                            'Suivez en temps réel toutes les opérations MTN, Moov et Celtiis depuis votre tableau de bord.')),
+                          i + 1,
+                          icones[i],
+                          i < etapesSource.length ? etapesSource[i].titre : defaut.etapes[i].titre,
+                          i < etapesSource.length ? etapesSource[i].description : defaut.etapes[i].description,
+                        ),
+                      ),
+                    ],
                   ],
                 )
               : Column(
                   children: [
-                    _stepCard(1, Icons.app_registration_rounded, 'Inscription',
-                        'Créez votre compte entreprise en quelques minutes. Essai gratuit de 30 jours.'),
-                    const SizedBox(height: 20),
-                    _stepCard(2, Icons.group_add_rounded, 'Ajoutez vos agents',
-                        'Invitez vos agents, contrôleurs et gestionnaires.'),
-                    const SizedBox(height: 20),
-                    _stepCard(3, Icons.trending_up_rounded, 'Gérez & suivez',
-                        'Suivez en temps réel toutes vos opérations Mobile Money.'),
+                    for (int i = 0; i < icones.length; i++) ...[
+                      if (i > 0) const SizedBox(height: 20),
+                      _stepCard(
+                        i + 1,
+                        icones[i],
+                        i < etapesSource.length ? etapesSource[i].titre : defaut.etapes[i].titre,
+                        i < etapesSource.length ? etapesSource[i].description : defaut.etapes[i].description,
+                      ),
+                    ],
                   ],
                 ),
         ],
@@ -997,47 +991,30 @@ class _LandingPageState extends State<LandingPage>
   // ROLES SECTION
   // ════════════════════════════════════════════════════════════════════════════
   Widget _buildRolesSection(bool isWide) {
-    final roles = [
-      _RoleData(
-        icon: Icons.manage_accounts_rounded,
-        color: AppTheme.accentOrange,
-        title: 'Gestionnaire',
-        subtitle: 'Chef d\'agence',
-        permissions: [
-          'Tableau de bord complet de l\'agence',
-          'Suivi des agents et des opérations',
-          'Rapports financiers journaliers',
-          'Gestion des retraits et ristournes',
-          'Ajout et gestion de l\'équipe',
-        ],
-      ),
-      _RoleData(
-        icon: Icons.supervisor_account_rounded,
-        color: AppTheme.success,
-        title: 'Contrôleur',
-        subtitle: 'Superviseur terrain',
-        permissions: [
-          'Validation des points journaliers',
-          'Calcul automatique des ristournes',
-          'Supervision des agents assignés',
-          'Rapports de contrôle détaillés',
-          'Historique des validations',
-        ],
-      ),
-      _RoleData(
-        icon: Icons.person_rounded,
-        color: AppTheme.mtnYellow,
-        title: 'Agent',
-        subtitle: 'Opérateur terrain',
-        permissions: [
-          'Saisie des opérations quotidiennes',
-          'Suivi de son solde en temps réel',
-          'Historique de ses transactions',
-          'Rapport journalier personnel',
-          'Accès MTN, Moov et Celtiis',
-        ],
-      ),
+    // Icônes et couleurs hardcodées — titres, sousTitres et permissions viennent de Firestore
+    const iconesCouleurs = [
+      (Icons.manage_accounts_rounded, AppTheme.accentOrange),
+      (Icons.supervisor_account_rounded, AppTheme.success),
+      (Icons.person_rounded, AppTheme.mtnYellow),
     ];
+
+    final defaut = LandingConfig.defaut();
+    final rolesSource = _landingConfig.roles.isNotEmpty
+        ? _landingConfig.roles
+        : defaut.roles;
+
+    final roles = List.generate(iconesCouleurs.length, (i) {
+      final source = i < rolesSource.length ? rolesSource[i] : defaut.roles[i];
+      return _RoleData(
+        icon: iconesCouleurs[i].$1,
+        color: iconesCouleurs[i].$2,
+        title: source.titre,
+        subtitle: source.sousTitre,
+        permissions: source.permissions,
+      );
+    });
+
+    final header = _landingConfig.rolesHeader;
 
     return Container(
       padding: EdgeInsets.symmetric(
@@ -1045,9 +1022,9 @@ class _LandingPageState extends State<LandingPage>
       child: Column(
         children: [
           _sectionHeader(
-            'Chaque acteur à sa place',
-            'Gestion des rôles',
-            'SikaFlow adapte l\'interface et les permissions selon le rôle de chaque membre de votre équipe.',
+            header.titre,
+            header.badge,
+            header.description,
           ),
           const SizedBox(height: 56),
           isWide

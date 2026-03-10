@@ -1,22 +1,19 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../config/app_config.dart';
 import '../models/abonnement_model.dart';
 
 /// Service FedaPay — intégration REST API paiement mobile
 /// Documentation : https://docs.fedapay.com/api-reference
+///
+/// Les clés API sont injectées à la compilation via --dart-define.
+/// Voir lib/config/app_config.dart pour les instructions.
 class FedaPayService {
-  // ── Clés API LIVE (production) ───────────────────────────────────────────
-  static const String _publicKey   = 'pk_live_nOsysdVj9bE_YttzbGopEs4a';
-  static const String _secretKey   = 'sk_live_9a0WW-AFpfIfOYTFruNSEzOD';
-  static const String _baseUrl     = 'https://live.fedapay.com/v1';
-  static const String _checkoutUrl = 'https://live.fedapay.com';
-
-  // ── Clés SANDBOX (tests) — décommenter pour revenir en mode test ──────────
-  // static const String _publicKey   = 'pk_sandbox_2K2AondxI9XxopQtAuyObQou';
-  // static const String _secretKey   = 'sk_sandbox_0Sc5tu7Q6Q350sMOKnmGsp9U';
-  // static const String _baseUrl     = 'https://sandbox.fedapay.com/v1';
-  // static const String _checkoutUrl = 'https://sandbox.fedapay.com';
+  static String get _publicKey   => AppConfig.fedaPayPublicKey;
+  static String get _secretKey   => AppConfig.fedaPaySecretKey;
+  static String get _baseUrl     => AppConfig.fedaPayBaseUrl;
+  static String get _checkoutUrl => AppConfig.fedaPayCheckoutUrl;
 
   // ── Headers d'authentification ────────────────────────────────────────────
   static Map<String, String> get _headers => {
@@ -71,8 +68,7 @@ class FedaPayService {
         body: jsonEncode(body),
       );
 
-      debugPrint('FedaPay create transaction: ${response.statusCode}');
-      debugPrint('FedaPay response: ${response.body}');
+      if (kDebugMode) debugPrint('[FedaPay] create transaction: ${response.statusCode}');
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -101,8 +97,8 @@ class FedaPayService {
         return FedaPayResultat.erreur(msg);
       }
     } catch (e) {
-      debugPrint('FedaPay erreur création transaction: $e');
-      return FedaPayResultat.erreur('Erreur réseau : $e');
+      if (kDebugMode) debugPrint('[FedaPay] erreur création transaction: $e');
+      return FedaPayResultat.erreur('Erreur réseau. Veuillez réessayer.');
     }
   }
 
@@ -125,7 +121,7 @@ class FedaPayService {
       }
       return null;
     } catch (e) {
-      debugPrint('FedaPay vérification statut: $e');
+      if (kDebugMode) debugPrint('[FedaPay] vérification statut: $e');
       return null;
     }
   }
@@ -154,7 +150,7 @@ class FedaPayService {
       }
       return [];
     } catch (e) {
-      debugPrint('FedaPay lister transactions: $e');
+      if (kDebugMode) debugPrint('[FedaPay] lister transactions: $e');
       return [];
     }
   }
@@ -207,7 +203,7 @@ class FedaPayService {
       }
       return null;
     } catch (e) {
-      debugPrint('FedaPay customer: $e');
+      if (kDebugMode) debugPrint('[FedaPay] customer: $e');
       return null;
     }
   }

@@ -17,7 +17,7 @@ class _InscriptionScreenState extends State<InscriptionScreen>
     with SingleTickerProviderStateMixin {
 
   final _pageCtrl = PageController();
-  int  _etape     = 0;   // 0 = formulaire (confirmation supprimée)
+  int _etape = 0;   // 0 = formulaire, 1 = succès
   bool _chargement = false;
 
   // ── Contrôleurs ──────────────────────────────────────────────────────────
@@ -82,13 +82,15 @@ class _InscriptionScreenState extends State<InscriptionScreen>
     setState(() => _chargement = false);
 
     if (result['success'] == true) {
-      // Rediriger directement vers le dashboard gestionnaire
-      // La bannière "email non vérifié" sera affichée dans le dashboard
       if (!mounted) return;
-      // go_router redirige automatiquement vers /gestionnaire via refreshListenable
-      // Pas besoin de naviguer manuellement
+      setState(() => _etape = 1);
+      _pageCtrl.nextPage(
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.easeInOutCubic,
+      );
     } else {
-      _showSnack(result['erreur'] ?? 'Erreur lors de la création', isError: true);
+      final errMsg = result['erreur'] ?? result['message'] ?? 'Erreur lors de la création';
+      _showSnack(errMsg, isError: true);
     }
   }
 
@@ -114,6 +116,7 @@ class _InscriptionScreenState extends State<InscriptionScreen>
             physics: const NeverScrollableScrollPhysics(),
             children: [
               _buildFormulaire(),
+              _buildSucces(),
             ],
           ),
         ),
@@ -279,6 +282,118 @@ class _InscriptionScreenState extends State<InscriptionScreen>
       ),
     );
   }
+  // ══════════════════════════════════════════════════════════════════════════
+  // ÉTAPE 2 — Succès
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildSucces() {
+    final provider = context.read<AppProvider>();
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 28),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const SizedBox(height: 40),
+            // Icône succès
+            Container(
+              width: 110,
+              height: 110,
+              decoration: BoxDecoration(
+                color: AppTheme.success.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+                border: Border.all(color: AppTheme.success, width: 2.5),
+              ),
+              child: const Icon(Icons.check_rounded, color: AppTheme.success, size: 62),
+            ),
+            const SizedBox(height: 28),
+            const Text(
+              'Compte créé !',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.3,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Bienvenue sur SikaFlow !\n\nUn email de vérification a été envoyé à\n${_emailCtrl.text.trim()}\n\nVérifiez votre boîte mail pour activer votre compte.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 14,
+                height: 1.65,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppTheme.accentOrange.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppTheme.accentOrange.withValues(alpha: 0.3)),
+              ),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.info_outline_rounded, color: AppTheme.accentOrange, size: 18),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Sans activation de votre email sous 72h, le compte sera automatiquement supprimé.',
+                      style: TextStyle(
+                        color: AppTheme.accentOrange,
+                        fontSize: 12,
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
+            // Bouton accéder
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  if (provider.estConnecte) {
+                    context.go(Routes.gestionnaire);
+                  } else {
+                    context.go('${Routes.connexion}?email=${Uri.encodeComponent(_emailCtrl.text.trim())}');
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.accentOrange,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+                icon: const Icon(Icons.dashboard_rounded, color: Colors.white),
+                label: const Text(
+                  'ACCÉDER À MON ESPACE',
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: () => context.go(Routes.connexion),
+              child: const Text(
+                'Se connecter plus tard',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+              ),
+            ),
+            const SizedBox(height: 30),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ── Widgets utilitaires ──────────────────────────────────────────────────
 
   Widget _sectionLabel(String label, IconData icon) {

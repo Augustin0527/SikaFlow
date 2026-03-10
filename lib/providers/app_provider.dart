@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
@@ -33,6 +32,7 @@ class AppProvider extends ChangeNotifier {
   // La LandingPage s'affiche immédiatement.
   // Le splash n'apparaît que lors d'une tentative de connexion.
   bool   _chargement = false;
+  bool   _authManuelEnCours = false; // bloque le listener authStateChanges pendant inscription/connexion
   String? _erreur;
 
   // ── Listes ────────────────────────────────────────────────────────────────
@@ -114,6 +114,7 @@ class AppProvider extends ChangeNotifier {
 
       // Écouter les changements d'auth
       _authSafe.authStateChanges().listen((User? u) async {
+        if (_authManuelEnCours) return; // Ignorer pendant inscription/connexion manuelle
         if (u == null && _utilisateurConnecte != null) {
           _viderEtat();
         } else if (u != null && u.uid != _utilisateurConnecte?.id) {
@@ -211,6 +212,7 @@ class AppProvider extends ChangeNotifier {
 
   // ── Connexion / Déconnexion ────────────────────────────────────────────────
   Future<bool> seConnecter(String email, String motDePasse) async {
+    _authManuelEnCours = true;
     _setChargement(true);
     _erreur = null;
     notifyListeners();
@@ -241,10 +243,21 @@ class AppProvider extends ChangeNotifier {
       }
 
       await _chargerProfilFirebase(firebaseUser.uid);
-      return _utilisateurConnecte != null;
+
+      if (_utilisateurConnecte == null) {
+        _erreur = 'Votre profil est introuvable. Si vous venez de créer votre compte, veuillez réessayer dans quelques secondes.';
+        _authManuelEnCours = false;
+        _setChargement(false);
+        notifyListeners();
+        return false;
+      }
+
+      _authManuelEnCours = false;
+      return true;
 
     } on FirebaseAuthException catch (e) {
       _erreur = _traduireErreur(e.code);
+      _authManuelEnCours = false;
       _setChargement(false);
       notifyListeners();
       return false;
@@ -259,6 +272,7 @@ class AppProvider extends ChangeNotifier {
         _erreur = 'Connexion impossible. Veuillez réessayer.';
       }
       debugPrint('[AppProvider] seConnecter error: $e');
+      _authManuelEnCours = false;
       _setChargement(false);
       notifyListeners();
       return false;
@@ -384,10 +398,12 @@ class AppProvider extends ChangeNotifier {
     required String nomEntreprise,
     String? description,
   }) async {
+    _authManuelEnCours = true;
     try {
       // S'assurer que Firebase est prêt
       final firebaseOk = await _ensureFirebase();
       if (!firebaseOk) {
+        _authManuelEnCours = false;
         return {'success': false, 'message': 'Service indisponible. Vérifiez votre connexion internet.'};
       }
       // Créer le compte Firebase Auth
@@ -446,16 +462,17 @@ class AppProvider extends ChangeNotifier {
         'date_limite_activation': Timestamp.fromDate(limiteActivation),
       });
 
-      // Ne pas déconnecter : l'utilisateur accède directement au dashboard
-      // avec une bannière l'invitant à vérifier son email
-
-      // Charger son profil pour l'authentifier dans l'app
-      await _chargerProfilFirebase(uid);
+      // Déconnecter : l'utilisateur voit l'écran de succès puis se connecte
+      // manuellement (et verra la bannière de vérification email sur le dashboard)
+      await _authSafe.signOut();
+      _authManuelEnCours = false;
 
       return {'success': true, 'entreprise_id': entrepriseId, 'user_id': uid};
     } on FirebaseAuthException catch (e) {
+      _authManuelEnCours = false;
       return {'success': false, 'erreur': _traduireErreur(e.code)};
     } catch (e) {
+      _authManuelEnCours = false;
       return {'success': false, 'erreur': 'Erreur inattendue: $e'};
     }
   }

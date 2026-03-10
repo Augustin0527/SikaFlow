@@ -58,11 +58,13 @@ class _AdminPlansConfigScreenState extends State<AdminPlansConfigScreen>
     setState(() => _chargement = true);
     final plans  = await ConfigAbonnementService.chargerPlans();
     final global = await ConfigAbonnementService.chargerGlobal();
-    if (mounted) setState(() {
+    if (mounted) {
+      setState(() {
       _plans   = List.from(plans);
       _global  = global;
       _chargement = false;
     });
+    }
   }
 
   Future<void> _sauvegarder() async {
@@ -521,7 +523,7 @@ class _AdminPlansConfigScreenState extends State<AdminPlansConfigScreen>
                     const Spacer(),
                     Switch(
                       value: _global.essaiActif,
-                      activeColor: _orange,
+                      activeThumbColor: _orange,
                       onChanged: (v) => setState(() {
                         _global = _global.copyWith(essaiActif: v);
                       }),
@@ -899,7 +901,7 @@ class _PlanEditeurSheetState extends State<_PlanEditeurSheet> {
               Row(children: [
                 Switch(
                   value: _illimite,
-                  activeColor: _orange,
+                  activeThumbColor: _orange,
                   onChanged: (v) => setState(() {
                     _illimite = v;
                     if (v) _maxStandsCtrl.clear();
@@ -958,7 +960,7 @@ class _PlanEditeurSheetState extends State<_PlanEditeurSheet> {
               Row(children: [
                 Switch(
                   value: _populaire,
-                  activeColor: _orange,
+                  activeThumbColor: _orange,
                   onChanged: (v) => setState(() => _populaire = v),
                 ),
                 const SizedBox(width: 8),

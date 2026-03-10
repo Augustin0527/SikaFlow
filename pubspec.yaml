@@ -46,6 +46,9 @@ dependencies:
   cloud_firestore: 5.4.3
   firebase_storage: 12.3.2
 
+  # File/image picker (upload photos témoignages)
+  image_picker: 1.1.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
